@@ -4,6 +4,8 @@
 
 ## 独立发行版
 
+[无需 Codex：DeepSeek API 配置步骤（下位机 0.6.1 更新）](docs/DEEPSEEK-SETUP.zh.md)
+
 **[Windows 一键安装与 CLI 注册](docs/ONE-CLICK-INSTALL.md)**：双击 `Setup.cmd`，自动处理 Python、虚拟环境和依赖，注册用户 PATH。原独立 ZIP 可使用小型安装补充包。
 
 视频管线和下位机管线现在分别发布，各有 CLI 和 MCP。两个安装器各自创建 `.venv`，无需安装另一包。

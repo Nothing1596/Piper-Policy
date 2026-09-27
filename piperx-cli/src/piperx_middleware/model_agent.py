@@ -172,6 +172,7 @@ async def check_model(config: ModelConfig) -> dict[str, Any]:
         "messages": [{"role": "user", "content": "ping"}],
         "max_tokens": 1,
     }
+    apply_provider_options(endpoint, payload)
 
     t0 = time.monotonic()
     try:
@@ -350,6 +351,16 @@ def _sanitize_string(s: str) -> str:
     return clean[:200]
 
 
+def apply_provider_options(endpoint: str, payload: dict[str, Any]) -> None:
+    """The text tool loop does not round-trip provider reasoning fields.
+
+    DeepSeek defaults to thinking mode; explicitly disable it for its official
+    endpoint. Do not send vendor extensions to other OpenAI-compatible servers.
+    """
+    if urlparse(endpoint).hostname == "api.deepseek.com":
+        payload["thinking"] = {"type": "disabled"}
+
+
 async def run_turn(
     config: ModelConfig,
     messages: list[dict[str, Any]],
@@ -381,6 +392,7 @@ async def run_turn(
             }
             if openai_tools:
                 payload["tools"] = openai_tools
+            apply_provider_options(endpoint, payload)
 
             try:
                 async with httpx.AsyncClient(

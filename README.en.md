@@ -4,6 +4,8 @@
 
 ## Independent releases
 
+[DeepSeek API setup without Codex (Chinese guide; robot 0.6.1 update)](docs/DEEPSEEK-SETUP.zh.md)
+
 **[Windows one-click installation and CLI registration](docs/ONE-CLICK-INSTALL.md)**: double-click `Setup.cmd` to handle Python, the environment, dependencies and user PATH. An installer add-on supports the original standalone ZIPs.
 
 The video and robot pipelines now ship separately, each with its own CLI and MCP. Each installer creates an isolated `.venv` without requiring the other package.
