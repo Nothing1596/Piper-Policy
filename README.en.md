@@ -2,6 +2,54 @@
 
 [中文](README.md) | [English](README.en.md)
 
+## Independent releases
+
+The video and robot pipelines now ship separately, each with its own CLI and MCP. Each installer creates an isolated `.venv` without requiring the other package.
+
+| Kit | Entry points | Guide |
+|---|---|---|
+| [Video v0.3.0](https://github.com/Nothing1596/Piper-Policy/releases/tag/video-v0.3.0) | `piper-video` / `piper-video mcp` | [English](docs/VIDEO-GUIDE.en.md) / [中文](docs/VIDEO-GUIDE.zh.md) |
+| [Robot v0.6.0](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.6.0) | `piper-robot` / `piper-robot mcp` | [English](docs/ROBOT-GUIDE.en.md) / [中文](docs/ROBOT-GUIDE.zh.md) |
+
+### Video architecture
+
+```mermaid
+flowchart LR
+ V[Video] --> D[PyAV decode]
+ D --> C[OpenCV motion analysis / frame selection]
+ C --> O[Optional ONNX detection / tracking]
+ C --> M[Vision model API]
+ O --> M
+ M --> S[Schema and evidence checks]
+ S --> B[Stages / citations / unknowns / demo.json]
+```
+
+CV reduces the frames to inspect, detection supplies fallible hints, and the vision model interprets grasp, transport, release and final relationships. Citations connect claims to source images and uncertainty remains explicit. This is interpretation, not weight training.
+
+### Robot architecture
+
+```mermaid
+flowchart LR
+ A[Agent or user] --> CLI[piper-robot CLI]
+ A --> MCP[MCP tools]
+ CLI --> H[HTTP / shared executor]
+ MCP --> H
+ H --> Q[Authentication / deduplication / queue / limits / feedback]
+ Q --> SIM[MuJoCo]
+ Q --> CAN[Configured CAN backend]
+ SIM --> F[Status / jobs / RGB-D]
+ CAN --> F
+ F --> A
+```
+
+The robot kit starts simulation and captures RGB-D without the video package. MCP does not open another CAN owner. After job submission, check its final status and fresh observations. Camera capture currently supports MuJoCo; hardware drivers, SDK and calibration require separate commissioning.
+
+Codex, Claude Code and other agents can connect both MCP servers or invoke both CLIs: inspect demonstration, inspect current scene, act, check feedback and observe again. Historical video does not automatically become hardware commands. See [standalone validation](docs/SPLIT-VALIDATION.md).
+
+## Previous combined v0.2.1 release (retained)
+
+The following versions and commands belong to the original combined kit. Use the guides above for the new standalone kits.
+
 A video demonstration, visual policy, and robot execution toolkit for PiperX. One CLI includes **both upper-level and lower-level controller software**, with local vision models, model APIs, and MCP integration for agents such as Codex and Claude Code.
 
 **[Download the complete package v0.2.1](https://github.com/Nothing1596/Piper-Policy/releases/tag/v0.2.1)** · **[Deployment guide (Chinese)](docs/NEW-MACHINE-GUIDE.md)** · [Release notes (Chinese)](docs/RELEASE-NOTES.md)

@@ -2,6 +2,54 @@
 
 [中文](README.md) | [English](README.en.md)
 
+## 独立发行版
+
+视频管线和下位机管线现在分别发布，各有 CLI 和 MCP。两个安装器各自创建 `.venv`，无需安装另一包。
+
+| 安装包 | 独立入口 | 部署向导 |
+|---|---|---|
+| [视频 v0.3.0](https://github.com/Nothing1596/Piper-Policy/releases/tag/video-v0.3.0) | `piper-video` / `piper-video mcp` | [中文](docs/VIDEO-GUIDE.zh.md) / [English](docs/VIDEO-GUIDE.en.md) |
+| [下位机 v0.6.0](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.6.0) | `piper-robot` / `piper-robot mcp` | [中文](docs/ROBOT-GUIDE.zh.md) / [English](docs/ROBOT-GUIDE.en.md) |
+
+### 视频管线结构
+
+```mermaid
+flowchart LR
+ V[视频] --> D[PyAV 解码]
+ D --> C[OpenCV 运动分析与选帧]
+ C --> O[可选 ONNX 检测与跟踪]
+ C --> M[视觉模型 API]
+ O --> M
+ M --> S[结构与证据校验]
+ S --> B[阶段 / 帧引用 / unknown / demo.json]
+```
+
+CV 缩小需要看的帧范围，检测器提供可能有误的目标线索，视觉模型解释抓取、搬运、释放和最终关系。证据引用连回原片，不确定时保留 unknown。这是示范解析，不是更新模型权重。
+
+### 下位机管线结构
+
+```mermaid
+flowchart LR
+ A[模型代理或用户] --> CLI[piper-robot CLI]
+ A --> MCP[MCP 工具]
+ CLI --> H[HTTP / 单一共享执行器]
+ MCP --> H
+ H --> Q[认证 / 去重 / 队列 / 限位 / 反馈]
+ Q --> SIM[MuJoCo]
+ Q --> CAN[已配置 CAN 后端]
+ SIM --> F[状态 / job / RGB-D]
+ CAN --> F
+ F --> A
+```
+
+下位机包独立提供仿真启动和 RGB-D 取图，不安装视频解析包。MCP 不另占 CAN。动作返回 job_id 后还需查询完成状态、再看当前画面。取图工具当前支持 MuJoCo；真机 SDK、驱动和标定需另行部署验收。
+
+Codex、Claude Code 等代理可以同时连接两个 MCP，或者直接调用两个 CLI：读示范 → 看当前场景 → 调动作工具 → 查反馈 → 再看图。视频历史不会直接转换为机械臂指令。见 [独立包验收](docs/SPLIT-VALIDATION.md)。
+
+## 原联合版 v0.2.1（保留）
+
+以下是原联合包的命令和版本。新独立包请使用上面的专用向导。
+
 面向 PiperX 的视频示范处理、视觉策略与机器人执行工具链。统一 CLI 同时包含**上位机和下位机软件**，支持本地视觉模型、模型 API，以及 Codex / Claude Code 等代理的 MCP 接入。
 
 **[下载完整安装包 v0.2.1](https://github.com/Nothing1596/Piper-Policy/releases/tag/v0.2.1)** · **[详细部署向导](docs/NEW-MACHINE-GUIDE.md)** · [版本说明](docs/RELEASE-NOTES.md)

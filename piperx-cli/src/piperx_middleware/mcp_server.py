@@ -140,7 +140,7 @@ GripperWidthM = Annotated[float, Field(ge=0, le=0.09, strict=True, allow_inf_nan
 EffortProtocol = Annotated[float, Field(ge=0, le=32.767, strict=True, allow_inf_nan=False)]
 
 
-def create_mcp(client: RobotClient | ServiceClient, *, allowed_http_hosts: list[str] | None = None):
+def create_mcp(client: RobotClient | ServiceClient, *, allowed_http_hosts: list[str] | None = None, workspace=None):
     async def call(method, path, body=None):
         # SDK tool callbacks otherwise execute synchronous functions on its event
         # loop. Keep service/HTTP I/O off that loop and finish it before teardown.
@@ -258,20 +258,37 @@ def create_mcp(client: RobotClient | ServiceClient, *, allowed_http_hosts: list[
         return await call("POST", "/v1/primitives", {"request_id": request_id, "command": {
             "kind": "move_linear", "xyz_m": xyz_m, "speed_percent": speed_percent, "timeout_s": timeout_s}})
 
+    if workspace is not None:
+        from pathlib import Path
+        from .simulation_camera import capture
+        from mcp.server.fastmcp import Image
+        from mcp.types import TextContent
+        root = Path(workspace).resolve(strict=True)
+        if not root.is_dir():
+            raise ValueError('workspace must be an existing directory')
+
+        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+        async def simulation_observe(output: str) -> list:
+            """Capture current MuJoCo RGB-D and camera metadata into a new workspace folder; returns pixels, never hidden object state or scoring."""
+            result = await anyio.to_thread.run_sync(lambda: capture(client, root, output))
+            return [TextContent(type='text', text=json.dumps(result)),
+                    Image(path=str(Path(result['evidence'])/'rgb.jpg')).to_image_content()]
+
     return mcp
 
 
-def main():
+def main(argv=None):
     import argparse
     from pathlib import Path
     parser = argparse.ArgumentParser(description="PiperX MCP stdio client for a shared executor; never opens CAN")
     parser.add_argument("--url", help="Executor URL; defaults to PIPERX_URL or http://127.0.0.1:8765")
     parser.add_argument("--root", type=Path, help="Local executor data directory (for its token file)")
     parser.add_argument("--token-file", type=Path, help="Model token file; value is never printed")
-    args = parser.parse_args()
+    parser.add_argument("--workspace", type=Path, help="Enable RGB-D capture inside this existing directory")
+    args = parser.parse_args(argv)
     client = RobotClient.from_env(url=args.url, token_file=args.token_file, root=args.root)
     try:
-        create_mcp(client).run(transport="stdio")
+        create_mcp(client, workspace=args.workspace).run(transport="stdio")
     finally:
         client.close()
 

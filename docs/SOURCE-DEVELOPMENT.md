@@ -1,6 +1,6 @@
 # 源码开发 / Source development
 
-完整离线包从 Releases 下载，按 NEW-MACHINE-GUIDE.md 操作。以下是联网安装源码的开发步骤，不下载视觉模型权重，也不启动机器人。
+独立离线包从 Releases 下载，分别按 VIDEO-GUIDE.zh.md / ROBOT-GUIDE.zh.md 操作。NEW-MACHINE-GUIDE.md 对应旧联合版。以下是联网安装源码的开发步骤，不下载视觉模型权重，也不启动机器人。
 
 For source development, install Python 3.12 and run from the repository root. This path downloads dependencies; use the release ZIP for offline Windows deployment.
 
@@ -15,7 +15,7 @@ py -3.12 -m venv .venv
 
 缺少外部 SDK 时，SDK 合约测试会明确跳过；测试不连接实体 CAN。SDK contract tests skip if a compatible external SDK is absent. Do not describe these tests as hardware validation.
 
-Use installed entry points `piper-lab` / `piperx`, or the combined dispatcher:
+Use independent entry points `piper-video` / `piper-robot`; legacy `piper-lab` / `piperx` remain available. To install only video, install `piper-lab[video,detector,model,mcp]` in its own environment; only robot needs `piperx-cli[simulation,hardware]`. The commands below demonstrate the retained combined dispatcher:
 
 ```powershell
 .\.venv\Scripts\python.exe piper-lab\packaging\joint-cli\piper.py --help

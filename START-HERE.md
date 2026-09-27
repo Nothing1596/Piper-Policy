@@ -1,4 +1,16 @@
-# 从这里开始：Piper CLI 0.2.1
+# 从这里开始：独立视频与下位机 CLI
+
+新部署按需要选择一个或两个独立包：
+
+- [视频管线 0.3.0 向导](docs/VIDEO-GUIDE.zh.md)：`piper-video`，选帧、模型 API、证据、MCP。
+- [下位机管线 0.6.0 向导](docs/ROBOT-GUIDE.zh.md)：`piper-robot`，执行器、仿真、相机、动作、MCP。
+- 英文说明见 [English README](README.en.md)。
+
+两包均解压后执行自己的 `install.ps1`，不共享虚拟环境。模型代理可以连接两个 MCP 或直接调用 CLI。
+
+## 原联合包 0.2.1
+
+以下说明仅适用于保留的旧联合发行包。
 
 这是 **Windows x64 / Python 3.12** 的完整联合安装包。视频管线、模型 API 适配、MCP 工具和 PiperX 下位 CLI 装到一个环境；前端仍是命令行。
 
