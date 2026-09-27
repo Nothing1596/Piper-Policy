@@ -1,0 +1,32 @@
+{
+  "name": "synthetic-video-v1-pipeline-control",
+  "provenance": "synthetic_2d_pipeline_fixture",
+  "human_demo_verified": false,
+  "max_decisions": 6,
+  "tasks": [
+    {
+      "id": "transfer",
+      "kind": "transfer",
+      "task": "Move the red block to the green tray, using the demonstration if available.",
+      "demo": "artifacts/human-video-v1/synthetic-demo-transfer",
+      "objects": ["red"]
+    },
+    {
+      "id": "ordered_place",
+      "kind": "ordered_place",
+      "task": "Arrange both blocks in the green tray in the demonstrated order.",
+      "demo": "artifacts/human-video-v1/synthetic-demo-red-blue-03",
+      "objects": ["red", "blue"],
+      "expected_order": ["red", "blue"]
+    },
+    {
+      "id": "push",
+      "kind": "push",
+      "task": "Push the demonstrated red block horizontally rightward in the current camera view, keeping it on the table.",
+      "demo": "artifacts/human-video-v1/synthetic-demo-push",
+      "objects": ["red"],
+      "direction": "image_right_on_table",
+      "minimum_distance_m": 0.05
+    }
+  ]
+}

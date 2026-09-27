@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=71"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "piperx-middleware"
+version = "0.5.0"
+requires-python = ">=3.11"
+description = "PiperX lower controller CLI, HTTP/MCP executor and local model simulation"
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "pydantic>=2.10,<3", "httpx>=0.28,<1", "mcp>=1.30,<2", "numpy>=1.26,<3", "scipy>=1.13,<2", "prompt-toolkit>=3.0.52,<4", "jsonschema>=4.20,<5"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+hardware = ["python-can>=4.4,<5"]
+simulation = ["mujoco==3.14.0", "Pillow>=10,<13"]
+
+[project.scripts]
+piperx = "piperx_middleware.cli:main"
+piperx-mcp = "piperx_middleware.mcp_server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.data-files]
+"share/piperx-middleware/mujoco" = ["assets/mujoco/scene.xml", "assets/mujoco/piper_x.xml", "assets/mujoco/provenance.json", "assets/mujoco/LICENSE"]
+"share/piperx-middleware/mujoco/meshes" = ["assets/mujoco/meshes/*.stl", "assets/mujoco/meshes/*.obj"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

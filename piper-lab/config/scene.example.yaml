@@ -1,0 +1,6 @@
+# Example geometry only. Measure in base_link; account for fingers, payload and supports.
+# Do not mark collision_scene_verified until checked in RViz against the real workcell.
+boxes:
+  - name: table
+    size_m: [1.2, 1.2, 0.05]
+    position_m: [0.3, 0.0, -0.075]

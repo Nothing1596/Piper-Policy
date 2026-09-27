@@ -1,0 +1,9 @@
+{
+  "provider": "openai-compatible",
+  "base_url": "https://YOUR_PROVIDER_HOST/v1",
+  "model": "YOUR_VISION_MODEL_ID",
+  "api_key_env": "PIPER_MODEL_API_KEY",
+  "structured_output": "json_schema",
+  "timeout_s": 300,
+  "max_output_tokens": 4096
+}
