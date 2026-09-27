@@ -2,6 +2,8 @@
 
 [中文](VIDEO-GUIDE.zh.md)
 
+[Complete command and feature reference](VIDEO-CLI-REFERENCE.md)
+
 Version 0.3.0, CLI `piper-video`. The Python distribution remains `piper-lab` for compatibility; this installation contains no robot distribution or MuJoCo. Legacy upper-level modules remain in the wheel, while this guide uses the video-only entry point.
 
 ## Install

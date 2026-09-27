@@ -2,6 +2,8 @@
 
 [English](ROBOT-GUIDE.en.md)
 
+[完整命令与功能参考](ROBOT-CLI-REFERENCE.md)
+
 版本 0.6.0，入口 `piper-robot`，原 `piperx` / `piperx-mcp` 仍可用。此包独立安装共享执行器、CLI、HTTP/MCP、MuJoCo 和机械臂模型，不安装视频解析包、检测器或视觉大模型。这里的“下位机”指主机上的控制中间件，不是机械臂固件。
 
 ## 1. 安装

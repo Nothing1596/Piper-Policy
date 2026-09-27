@@ -2,6 +2,8 @@
 
 [English](VIDEO-GUIDE.en.md)
 
+[完整命令与功能参考](VIDEO-CLI-REFERENCE.md)
+
 版本 0.3.0，入口 `piper-video`。此包独立安装视频处理、模型 API 和 MCP；不安装下位机或 MuJoCo。Python 分发名仍为 `piper-lab`，保留旧上位机模块以兼容源码，但本指南使用视频专用入口。
 
 ## 1. 安装

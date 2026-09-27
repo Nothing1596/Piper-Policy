@@ -52,6 +52,12 @@ def main():
                 shutil.copytree(a.template/name, root/name)
             shutil.copy2(repo/'docs/DETECTOR-SOURCE.md', root/'DETECTOR-SOURCE.md')
         (root/'work').mkdir()
+        reference = (repo/f'docs/{kind.upper()}-CLI-REFERENCE.md').read_text(encoding='utf-8')
+        reference = reference.replace('(../README.md)', '(https://github.com/Nothing1596/Piper-Policy/blob/main/README.md)')
+        reference = reference.replace('(../README.en.md)', '(https://github.com/Nothing1596/Piper-Policy/blob/main/README.en.md)')
+        reference = reference.replace(f'({kind.upper()}-GUIDE.zh.md)', '(README.md)').replace(f'({kind.upper()}-GUIDE.en.md)', '(README.en.md)')
+        reference = reference.replace('(SPLIT-VALIDATION.md)', '(https://github.com/Nothing1596/Piper-Policy/blob/main/docs/SPLIT-VALIDATION.md)')
+        (root/f'{kind.upper()}-CLI-REFERENCE.md').write_text(reference, encoding='utf-8')
         for language, suffix in [('zh', ''), ('en', '.en')]:
             guide = (repo/f'docs/{kind.upper()}-GUIDE.{language}.md').read_text(encoding='utf-8')
             guide = guide.replace(f'{kind.upper()}-GUIDE.en.md', 'README.en.md').replace(f'{kind.upper()}-GUIDE.zh.md', 'README.md')

@@ -11,6 +11,8 @@
 | [视频 v0.3.0](https://github.com/Nothing1596/Piper-Policy/releases/tag/video-v0.3.0) | `piper-video` / `piper-video mcp` | [中文](docs/VIDEO-GUIDE.zh.md) / [English](docs/VIDEO-GUIDE.en.md) |
 | [下位机 v0.6.0](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.6.0) | `piper-robot` / `piper-robot mcp` | [中文](docs/ROBOT-GUIDE.zh.md) / [English](docs/ROBOT-GUIDE.en.md) |
 
+**命令与功能参考：** [视频 CLI](docs/VIDEO-CLI-REFERENCE.md) · [下位机 CLI](docs/ROBOT-CLI-REFERENCE.md)。包含完整命令索引、参数、默认值、单位、调用示例、MCP 工具和实际 `--help` 输出。
+
 ### 视频管线结构
 
 ```mermaid

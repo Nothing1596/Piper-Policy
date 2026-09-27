@@ -11,6 +11,8 @@ The video and robot pipelines now ship separately, each with its own CLI and MCP
 | [Video v0.3.0](https://github.com/Nothing1596/Piper-Policy/releases/tag/video-v0.3.0) | `piper-video` / `piper-video mcp` | [English](docs/VIDEO-GUIDE.en.md) / [中文](docs/VIDEO-GUIDE.zh.md) |
 | [Robot v0.6.0](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.6.0) | `piper-robot` / `piper-robot mcp` | [English](docs/ROBOT-GUIDE.en.md) / [中文](docs/ROBOT-GUIDE.zh.md) |
 
+**Command and feature references:** [Video CLI](docs/VIDEO-CLI-REFERENCE.md) · [Robot CLI](docs/ROBOT-CLI-REFERENCE.md). These bilingual references include command inventories, parameters, defaults, units, examples, MCP tools and actual `--help` output.
+
 ### Video architecture
 
 ```mermaid
