@@ -4,6 +4,8 @@
 
 [Complete command and feature reference](ROBOT-CLI-REFERENCE.md)
 
+For automatic Python setup and user PATH registration, see [one-click installation](ONE-CLICK-INSTALL.md). Double-click `Setup.cmd` in new kits; original ZIPs use the small add-on. The original manual entry point remains documented below.
+
 Version 0.6.0, CLI `piper-robot`; legacy `piperx` and `piperx-mcp` remain available. This package contains the executor, CLI, HTTP/MCP, MuJoCo and robot assets. It installs no video pipeline, detector or vision-language model. The lower controller is host middleware, not arm firmware.
 
 ## Install and simulate

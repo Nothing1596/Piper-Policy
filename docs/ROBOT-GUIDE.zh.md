@@ -4,6 +4,8 @@
 
 [完整命令与功能参考](ROBOT-CLI-REFERENCE.md)
 
+更简单的入口：[一键安装与命令注册](ONE-CLICK-INSTALL.md)。新包双击 `Setup.cmd`；原版 ZIP 使用该页的小型补充包。它自动检测/安装 Python 并注册用户 PATH。下面保留原版手动入口说明。
+
 版本 0.6.0，入口 `piper-robot`，原 `piperx` / `piperx-mcp` 仍可用。此包独立安装共享执行器、CLI、HTTP/MCP、MuJoCo 和机械臂模型，不安装视频解析包、检测器或视觉大模型。这里的“下位机”指主机上的控制中间件，不是机械臂固件。
 
 ## 1. 安装

@@ -4,6 +4,8 @@
 
 [Complete command and feature reference](VIDEO-CLI-REFERENCE.md)
 
+For automatic Python setup and user PATH registration, see [one-click installation](ONE-CLICK-INSTALL.md). Double-click `Setup.cmd` in new kits; original ZIPs use the small add-on. The original manual entry point remains documented below.
+
 Version 0.3.0, CLI `piper-video`. The Python distribution remains `piper-lab` for compatibility; this installation contains no robot distribution or MuJoCo. Legacy upper-level modules remain in the wheel, while this guide uses the video-only entry point.
 
 ## Install

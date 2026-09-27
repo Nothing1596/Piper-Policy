@@ -52,6 +52,9 @@ def main():
                 shutil.copytree(a.template/name, root/name)
             shutil.copy2(repo/'docs/DETECTOR-SOURCE.md', root/'DETECTOR-SOURCE.md')
         (root/'work').mkdir()
+        install_guide = (repo/'docs/ONE-CLICK-INSTALL.md').read_text(encoding='utf-8')
+        install_guide = install_guide.replace('(../README.md)', '(https://github.com/Nothing1596/Piper-Policy/blob/main/README.md)').replace('(../README.en.md)', '(https://github.com/Nothing1596/Piper-Policy/blob/main/README.en.md)')
+        (root/'ONE-CLICK-INSTALL.md').write_text(install_guide, encoding='utf-8')
         reference = (repo/f'docs/{kind.upper()}-CLI-REFERENCE.md').read_text(encoding='utf-8')
         reference = reference.replace('(../README.md)', '(https://github.com/Nothing1596/Piper-Policy/blob/main/README.md)')
         reference = reference.replace('(../README.en.md)', '(https://github.com/Nothing1596/Piper-Policy/blob/main/README.en.md)')
@@ -62,13 +65,10 @@ def main():
             guide = (repo/f'docs/{kind.upper()}-GUIDE.{language}.md').read_text(encoding='utf-8')
             guide = guide.replace(f'{kind.upper()}-GUIDE.en.md', 'README.en.md').replace(f'{kind.upper()}-GUIDE.zh.md', 'README.md')
             (root/f'README{suffix}.md').write_text(guide, encoding='utf-8')
-        installer = (a.template/'install.ps1').read_text()
-        start = installer.index('& $python -m pip install --no-index --no-deps')
-        end = installer.index('& $python -m pip check', start)
-        installer = installer[:start]+installer[end:]
-        start = installer.index('& $python piper.py doctor')
-        installer = installer[:start]+f'& $python -m {module} --help\nif ($LASTEXITCODE -ne 0) {{ throw "CLI check failed" }}\nWrite-Output "Installed. Run .\\piper-{kind}.cmd --help."\n'
-        (root/'install.ps1').write_text(installer)
+        for script in (repo/'packaging/one-click').iterdir():
+            if script.suffix in ('.cmd', '.ps1'):
+                shutil.copy2(script, root/script.name)
+        (root/'install.ps1').write_text('& (Join-Path $PSScriptRoot "install-cli.ps1") @args\nexit $LASTEXITCODE\n')
         (root/f'piper-{kind}.cmd').write_text(f'@echo off\r\n"%~dp0.venv\\Scripts\\python.exe" -m {module} %*\r\nexit /b %errorlevel%\r\n')
         manifest = [{'path': f.relative_to(root).as_posix(), 'sha256': sha(f)}
                     for f in sorted(root.rglob('*')) if f.is_file()]
