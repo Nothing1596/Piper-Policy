@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "piperx-middleware"
-version = "0.6.1"
+version = "0.7.0"
 requires-python = ">=3.11"
 description = "PiperX lower controller CLI, HTTP/MCP executor and local model simulation"
 dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "pydantic>=2.10,<3", "httpx>=0.28,<1", "mcp>=1.30,<2", "numpy>=1.26,<3", "scipy>=1.13,<2", "prompt-toolkit>=3.0.52,<4", "jsonschema>=4.20,<5"]
 
 [project.optional-dependencies]
-test = ["pytest>=8,<10"]
+test = ["pytest>=8,<10", "pytest-asyncio>=1,<2"]
 hardware = ["python-can>=4.4,<5"]
 simulation = ["mujoco==3.14.0", "Pillow>=10,<13"]
 
@@ -29,3 +29,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.setuptools.package-data]
+"piperx_middleware.vendor.piper_aio" = ["LICENSE"]

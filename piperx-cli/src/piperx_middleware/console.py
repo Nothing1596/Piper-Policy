@@ -86,7 +86,8 @@ class ConsoleCompleter(Completer):
 
         # Slash command completion
         if text.startswith("/") and " " not in text:
-            for cmd, meta in SLASH_COMMANDS:
+            commands = getattr(self.controller, "slash_commands", SLASH_COMMANDS)
+            for cmd, meta in commands:
                 if cmd.startswith(text):
                     yield Completion(cmd, start_position=-len(text), display_meta=meta)
             return
@@ -161,6 +162,9 @@ class ConsoleController:
         self.cached_status: dict[str, Any] | None = None
         self._toolbar_task: asyncio.Task | None = None
         self._closing: bool = False
+        self.exit_requested: bool = False
+        self._draining: bool = False
+        self._session_lost: bool = False
 
     async def start(self) -> None:
         """Initialize model config, attempt MCP bridge connection, display overview, and start toolbar poller."""
@@ -280,6 +284,12 @@ class ConsoleController:
 
     async def invoke_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
         """Validate schema, inject request_id, call tool, and poll job until terminal."""
+        if getattr(self, "_draining", False):
+            return {"error": {"code": "draining", "message": "Console is draining; new tool calls rejected."}}
+
+        if getattr(self, "_session_lost", False):
+            return {"error": {"code": "session_lost", "message": "Control session lost. Use /connect to reacquire session."}}
+
         if not isinstance(args, dict):
             return {"error": {"code": "invalid_arguments", "message": "Arguments must be a dictionary"}}
 
@@ -366,7 +376,7 @@ class ConsoleController:
 
         # Handle robot_status(job_id) result terminal immediately
         if name == "robot_status":
-            if status not in ("accepted", "running"):
+            if status not in ("accepted", "running", "awaiting_approval"):
                 self.emit(f"<- Tool {name} completed.")
                 return result
 
@@ -375,9 +385,14 @@ class ConsoleController:
             self.emit(f"<- Tool {name} completed: {status}")
             return result
 
-        # Poll ONLY accepted/running or cancellation_requested
-        if status in ("accepted", "running", "cancellation_requested"):
-            self.emit(f"<- Tool {name} accepted job: {job_id}")
+        # Poll ONLY accepted/running, cancellation_requested, or awaiting_approval
+        if status in ("accepted", "running", "cancellation_requested", "awaiting_approval"):
+            if status == "awaiting_approval":
+                reasons = result.get("reasons") or (result.get("approval") or {}).get("reasons") or (result.get("job") or {}).get("reasons")
+                r_tag = f" ({', '.join(reasons)})" if reasons else ""
+                self.emit(f"<- Tool {name} awaiting approval{r_tag}: {job_id}")
+            else:
+                self.emit(f"<- Tool {name} accepted job: {job_id}")
             return await self._poll_job_until_terminal(name, job_id, call_args)
 
         self.emit(f"<- Tool {name} completed.")
@@ -391,8 +406,11 @@ class ConsoleController:
         grace_s = 5.0
         deadline = time.monotonic() + timeout_s + grace_s
         last_status = None
+        was_awaiting = False
 
-        while time.monotonic() < deadline:
+        while True:
+            if not was_awaiting and time.monotonic() >= deadline:
+                break
             try:
                 status_res = await self.bridge.call("robot_status", {"job_id": job_id})
             except Exception as exc:
@@ -415,6 +433,13 @@ class ConsoleController:
             if status != last_status:
                 self.emit(f"Job {job_id}: {status}")
                 last_status = status
+
+            if status == "awaiting_approval":
+                was_awaiting = True
+                deadline = time.monotonic() + timeout_s + grace_s
+            elif was_awaiting and status in ("accepted", "running"):
+                deadline = time.monotonic() + timeout_s + grace_s
+                was_awaiting = False
 
             # Outcome unknown is terminal, detect before generic error envelope
             if status in ("succeeded", "completed", "failed", "cancelled", "rejected", "stopped", "outcome_unknown"):
@@ -596,7 +621,7 @@ class ConsoleController:
             self.emit(f"Discovery note: {note}")
 
         devices = res.get("devices") or []
-        connected_id = res.get("connected_device_id")
+        connected_id = res.get("connected_device_id") or res.get("connected_id")
 
         if not target_id:
             if connected_id:
@@ -606,13 +631,14 @@ class ConsoleController:
                 self.emit("No devices discovered on executor host.")
                 return
             elif len(devices) == 1:
-                target_id = devices[0].get("id")
+                target_id = devices[0].get("device_id") or devices[0].get("id")
                 self.emit(f"Auto-selected device: {target_id}")
             else:
                 self.emit(f"Discovered {len(devices)} devices:")
                 for d in devices:
-                    status_tag = " (connected)" if d.get("connected") or d.get("id") == connected_id else ""
-                    self.emit(f"  - {d.get('id')}: {d.get('label', 'unlabeled')}{status_tag}")
+                    dev_id = d.get("device_id") or d.get("id")
+                    status_tag = " (connected)" if d.get("connected") or dev_id == connected_id else ""
+                    self.emit(f"  - {dev_id}: {d.get('label', 'unlabeled')}{status_tag}")
                 self.emit("Specify device ID to connect: /connect <device_id>")
                 return
 
@@ -991,7 +1017,7 @@ async def _run_interactive_loop(controller: ConsoleController) -> None:
                 if not line:
                     continue
                 cont = await controller.handle_line(line)
-                if not cont:
+                if not cont or getattr(controller, "exit_requested", False):
                     break
             except KeyboardInterrupt:
                 if controller.background_task and not controller.background_task.done():
@@ -1018,7 +1044,7 @@ async def _run_piped_loop(controller: ConsoleController) -> None:
             if not line:
                 continue
             cont = await controller.handle_line(line)
-            if not cont:
+            if not cont or getattr(controller, "exit_requested", False):
                 break
             if controller.background_task and not controller.background_task.done():
                 await controller.background_task

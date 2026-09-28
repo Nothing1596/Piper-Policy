@@ -11,6 +11,7 @@ from .backends import Backend, check_state
 from .models import ControlMode, DomainError, ExecuteRequest, GripperMove, JointMove, JOINT_LIMITS_DEG, LeaseRequest, Settings
 from .store import Store
 from .runtime_controls import RuntimeControls
+from .interaction_service import InteractionControls
 
 
 def _command_defaults(command):
@@ -20,7 +21,7 @@ def _command_defaults(command):
     return command
 
 
-class RobotService(RuntimeControls):
+class RobotService(InteractionControls, RuntimeControls):
     """One serialized action owner, shared by HTTP and every MCP client."""
     def __init__(self, backend: Backend, settings: Settings):
         self.backend, self.settings = backend, settings
@@ -41,6 +42,7 @@ class RobotService(RuntimeControls):
         self.closing = False
         self.connection_attempted = False
         self.instance_id = str(uuid.uuid4())
+        self._init_interaction()
         self._init_controls()
 
     def _require_open(self):
@@ -54,7 +56,9 @@ class RobotService(RuntimeControls):
             "simulation": self.backend.name in ("sim", "mujoco"),
             "hardware_motion_configured": self.settings.allow_motion,
             "control_profile": self.settings.control_profile,
-            "requires_control_window": self.settings.control_profile == "calibration",
+            "requires_control_window": self.settings.control_profile == "calibration" and not self.interaction_required,
+            "requires_control_session": self.interaction_required,
+            "approval_modes": ["always", "risk", "auto"],
             "mcp_tools": ["robot_status", "robot_connect", "robot_disconnect", "robot_move_joints", "robot_gripper", "robot_stop",
                           "move_to", "move_by", "rotate", "set_gripper", "robot_set_control_mode", "move_linear", "robot_diagnostics"],
             "http_operations": ["control-mode", "connect", "disconnect", "state", "move", "primitives", "preview", "execute", "job", "stop", "shutdown",
@@ -144,6 +148,7 @@ class RobotService(RuntimeControls):
             return self.state()
 
     def _disconnect_locked(self):
+        self._cancel_pending("connection_changed")
         self.lease = None
         self.plans.clear()
         self.measured_limits = None
@@ -183,7 +188,9 @@ class RobotService(RuntimeControls):
                 tcp = PiperKinematics(self.settings.tcp_offset_m, self.settings.tcp_offset_rpy_deg).pose(s.q_deg)
                 tcp.update(source="forward_kinematics", feedback_stamp_s=s.feedback_stamp_s,
                            feedback_age_s=s.feedback_age_s, feedback_live=live)
-            return {"robot": s.public(), "tcp": tcp, "ready": ready, "not_ready_reason": reason,
+            return {"instance_id": self.instance_id, "robot": s.public(), "tcp": tcp, "ready": ready, "not_ready_reason": reason,
+                    "interaction": {"policy_mode": self.policy.mode, "session": self.sessions.public(),
+                                    "control_session_required": self.interaction_required, "scene_collision_checked": False},
                     "observation_identity": {"instance_id": self.instance_id, "connection_epoch": self.epoch,
                         "clock_domain": "executor_host_monotonic", "source_stamp_s": s.feedback_stamp_s,
                         "valid_until_s": s.feedback_stamp_s + self.settings.feedback_timeout_s if s.feedback_stamp_s is not None else None,
@@ -228,7 +235,7 @@ class RobotService(RuntimeControls):
             if self.settings.control_profile == "calibration" and command.speed_percent > self.settings.max_speed_percent:
                 raise DomainError("speed_limit", "Speed exceeds the configured controller limit.", 422)
             return
-        if self.settings.control_profile == "direct":
+        if self.interaction_required or self.settings.control_profile == "direct":
             return
         lease = self.lease
         if self.cancel.is_set() or not lease or time.monotonic() >= lease["deadline"]:
@@ -299,6 +306,7 @@ class RobotService(RuntimeControls):
                 if previous["plan_id"] != req.plan_id:
                     raise DomainError("idempotency_conflict", "This request_id already refers to another plan.")
                 return previous
+            self._require_session()
             with self.cancel_lock:
                 acceptance_generation = self.stop_generation
             if self.active:
@@ -322,22 +330,26 @@ class RobotService(RuntimeControls):
                    "command_attempted": False, "stop_result": None}
             if "primitive" in plan:
                 job.update(primitive=copy.deepcopy(plan["primitive"]), resolution=copy.deepcopy(plan["resolution"]))
-            with self.control_lock:
-                with self.cancel_lock:
-                    if plan.get("stop_generation", acceptance_generation) != self.stop_generation:
-                        raise DomainError("cancelled", "Stop requested while preparing the action; no command sent.")
-                    if self.settings.control_profile == "direct" or isinstance(command, ControlMode):
-                        self.cancel.clear()
-                # Durable acceptance precedes any CAN write and cancellation ownership.
-                # Do not clear cancellation after this potentially blocking journal write.
-                self.store.put(job, new=True)
-                plan["consumed"] = True
-                self.active = job["job_id"]
-            # A stop after acceptance must be observed before the first command.
-            self.thread = threading.Thread(target=self._run, args=(job, command, copy.deepcopy(plan)),
-                                           name="piperx-action", daemon=True)
-            self.thread.start()
-            return copy.deepcopy(job)
+            if self._queue_approval(job, command, plan, state):
+                return copy.deepcopy(job)
+            return self._start_job(job, command, plan)
+
+    def _start_job(self, job, command, plan, *, new=True):
+        # Caller holds self.lock. Admission is durable before the worker can write.
+        self._require_session()
+        with self.control_lock:
+            with self.cancel_lock:
+                if plan["stop_generation"] != self.stop_generation:
+                    raise DomainError("cancelled", "Stop requested while preparing the action; no command sent.")
+                if self.interaction_required or self.settings.control_profile == "direct" or isinstance(command, ControlMode):
+                    self.cancel.clear()
+            self.store.put(job, new=new)
+            plan["consumed"] = True
+            self.active = job["job_id"]
+        self.thread = threading.Thread(target=self._run, args=(job, command, copy.deepcopy(plan)),
+                                       name="piperx-action", daemon=True)
+        self.thread.start()
+        return copy.deepcopy(job)
 
     def move(self, command: JointMove | GripperMove | ControlMode, request_id: str):
         """Direct model entry; internal preview and acceptance remain atomic."""
@@ -600,6 +612,11 @@ class RobotService(RuntimeControls):
         with self.control_lock:
             self.cancel.set()
             self.lease = None
+            if self.lock.acquire(blocking=False):
+                try:
+                    self._cancel_pending("stop_requested")
+                finally:
+                    self.lock.release()
             if self.active:
                 # Worker owns writes. An already blocked native call cannot be interrupted here.
                 return {"status": "cancellation_requested", "job_id": self.active, "confirmed_stopped": False}

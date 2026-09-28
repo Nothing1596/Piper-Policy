@@ -1,0 +1,493 @@
+{
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "backend": "mujoco",
+  "physical_hardware": false,
+  "actions": [
+    {
+      "request_id": "win-sim-joint-001",
+      "job_id": "94948033-8fc0-4557-bdb5-7e9e4a407a21",
+      "status": "succeeded",
+      "robot": {
+        "connected": true,
+        "q_deg": [
+          4.999950991928418,
+          0.008505418623271442,
+          -0.002674642458161361,
+          1.133817271896472e-05,
+          -1.2891297774179451e-08,
+          -6.362077617815773e-09
+        ],
+        "velocity_deg_s": [
+          0.00011415479337685308,
+          -0.03566614889604744,
+          0.01830205352998548,
+          -0.00011380481011530746,
+          5.817074949578243e-08,
+          5.055678373261445e-08
+        ],
+        "enabled": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "ctrl_mode": 1,
+        "motion_mode": 1,
+        "teach_status": 0,
+        "arm_status": 0,
+        "error_code": 0,
+        "feedback_age_s": 0.0,
+        "gripper_width_m": 0.039999999997981144,
+        "gripper_enabled": true,
+        "gripper_error": false,
+        "gripper_age_s": 0.0,
+        "gripper_mode": "width",
+        "received_frames": 2492,
+        "tx_frames": 1,
+        "diagnostics": {
+          "simulation": true,
+          "backend": "mujoco",
+          "physical_validation": false,
+          "epoch": 0,
+          "software_estop_latched": false,
+          "gripper_contact": {
+            "supported": false,
+            "finger1_force_n": 0.0,
+            "finger2_force_n": 0.0,
+            "source_timestamp_s": 77995.093
+          }
+        },
+        "feedback_stamp_s": 77995.093,
+        "gripper_stamp_s": 77995.093,
+        "collision_status": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "motor_telemetry": [
+          {
+            "joint": 1,
+            "actuator_torque_nm": 0.0003137101097934192,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 2,
+            "actuator_torque_nm": -0.10092279202249396,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 3,
+            "actuator_torque_nm": 0.028141807218803917,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 4,
+            "actuator_torque_nm": -5.0464105070535216e-05,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 5,
+            "actuator_torque_nm": 4.283791257529431e-08,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 6,
+            "actuator_torque_nm": 1.0832652842433309e-08,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          }
+        ]
+      }
+    },
+    {
+      "request_id": "win-sim-gripper-001",
+      "job_id": "bae24006-6d80-444a-9b44-9643d704d3cd",
+      "status": "succeeded",
+      "robot": {
+        "connected": true,
+        "q_deg": [
+          4.999985841213098,
+          0.0009134387205093946,
+          -7.248713447243656e-05,
+          -7.906621558056367e-07,
+          -2.332945138140286e-09,
+          -4.309003977973826e-08
+        ],
+        "velocity_deg_s": [
+          3.3001062364507416e-05,
+          -0.0038340987805203655,
+          0.000488629155726893,
+          1.5965450307269404e-06,
+          8.829968582358152e-09,
+          7.407618091685469e-07
+        ],
+        "enabled": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "ctrl_mode": 1,
+        "motion_mode": 1,
+        "teach_status": 0,
+        "arm_status": 0,
+        "error_code": 0,
+        "feedback_age_s": 0.0,
+        "gripper_width_m": 0.03000190119934602,
+        "gripper_enabled": true,
+        "gripper_error": false,
+        "gripper_age_s": 0.0,
+        "gripper_mode": "width",
+        "received_frames": 2759,
+        "tx_frames": 2,
+        "diagnostics": {
+          "simulation": true,
+          "backend": "mujoco",
+          "physical_validation": false,
+          "epoch": 0,
+          "software_estop_latched": false,
+          "gripper_contact": {
+            "supported": false,
+            "finger1_force_n": 0.0,
+            "finger2_force_n": 0.0,
+            "source_timestamp_s": 77995.625
+          }
+        },
+        "feedback_stamp_s": 77995.625,
+        "gripper_stamp_s": 77995.625,
+        "collision_status": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "motor_telemetry": [
+          {
+            "joint": 1,
+            "actuator_torque_nm": 9.06278322787557e-05,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 2,
+            "actuator_torque_nm": -0.010836699772867556,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 3,
+            "actuator_torque_nm": 0.0007664352200573354,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 4,
+            "actuator_torque_nm": 4.018186493242884e-06,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 5,
+            "actuator_torque_nm": 7.81323076219016e-09,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 6,
+            "actuator_torque_nm": 7.110577860728018e-08,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          }
+        ]
+      }
+    },
+    {
+      "request_id": "win-sim-home-001",
+      "job_id": "1657b705-4902-4cbb-979e-83b236dad345",
+      "status": "succeeded",
+      "robot": {
+        "connected": true,
+        "q_deg": [
+          0.05474163711168657,
+          1.4723428914058886e-06,
+          6.592059090947866e-08,
+          4.5903104773813736e-08,
+          1.1974062459072488e-05,
+          -1.0750401877864996e-07
+        ],
+        "velocity_deg_s": [
+          -0.12759130525501908,
+          -6.138155101336121e-06,
+          -8.274607035676459e-07,
+          -6.099802282255259e-07,
+          -0.0001248439367743808,
+          3.940174327588039e-07
+        ],
+        "enabled": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "ctrl_mode": 1,
+        "motion_mode": 1,
+        "teach_status": 0,
+        "arm_status": 0,
+        "error_code": 0,
+        "feedback_age_s": 0.0,
+        "gripper_width_m": 0.030000000179188264,
+        "gripper_enabled": true,
+        "gripper_error": false,
+        "gripper_age_s": 0.0,
+        "gripper_mode": "width",
+        "received_frames": 3547,
+        "tx_frames": 3,
+        "diagnostics": {
+          "simulation": true,
+          "backend": "mujoco",
+          "physical_validation": false,
+          "epoch": 0,
+          "software_estop_latched": false,
+          "gripper_contact": {
+            "supported": false,
+            "finger1_force_n": 0.0,
+            "finger2_force_n": 0.0,
+            "source_timestamp_s": 77997.203
+          }
+        },
+        "feedback_stamp_s": 77997.203,
+        "gripper_stamp_s": 77997.203,
+        "collision_status": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "motor_telemetry": [
+          {
+            "joint": 1,
+            "actuator_torque_nm": -0.35039118098885635,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 2,
+            "actuator_torque_nm": -1.748828768265978e-05,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 3,
+            "actuator_torque_nm": -4.971922122852197e-07,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 4,
+            "actuator_torque_nm": -1.9090003961297787e-07,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 5,
+            "actuator_torque_nm": -3.695176738947016e-05,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          },
+          {
+            "joint": 6,
+            "actuator_torque_nm": 1.8552988878723262e-07,
+            "motor_temp_c": null,
+            "foc_temp_c": null,
+            "bus_current_a": null,
+            "source": "mujoco"
+          }
+        ]
+      }
+    }
+  ],
+  "tools": [
+    "robot_status",
+    "robot_connect",
+    "robot_disconnect",
+    "robot_set_control_mode",
+    "robot_move_joints",
+    "robot_gripper",
+    "robot_stop",
+    "move_to",
+    "move_by",
+    "rotate",
+    "set_gripper",
+    "robot_diagnostics",
+    "move_linear"
+  ],
+  "initial_robot": {
+    "connected": true,
+    "q_deg": [
+      -3.2880849689939595e-21,
+      29.999999999999996,
+      -29.999999999999996,
+      -2.960655083539522e-20,
+      -1.2038791217141393e-20,
+      -6.1801203211093465e-19
+    ],
+    "velocity_deg_s": [
+      -2.365786207114668e-18,
+      -7.063180847527069e-19,
+      6.999211796126617e-18,
+      -2.1993155774940755e-17,
+      -8.688566469315565e-18,
+      -2.4375045277386886e-17
+    ],
+    "enabled": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "ctrl_mode": 1,
+    "motion_mode": 1,
+    "teach_status": 0,
+    "arm_status": 0,
+    "error_code": 0,
+    "feedback_age_s": 0.0,
+    "gripper_width_m": 0.04,
+    "gripper_enabled": true,
+    "gripper_error": false,
+    "gripper_age_s": 0.0,
+    "gripper_mode": "width",
+    "received_frames": 9,
+    "tx_frames": 0,
+    "diagnostics": {
+      "simulation": true,
+      "backend": "mujoco",
+      "physical_validation": false,
+      "epoch": 0,
+      "software_estop_latched": false,
+      "gripper_contact": {
+        "supported": false,
+        "finger1_force_n": 0.0,
+        "finger2_force_n": 0.0,
+        "source_timestamp_s": 77990.125
+      }
+    },
+    "feedback_stamp_s": 77990.125,
+    "gripper_stamp_s": 77990.125,
+    "collision_status": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "motor_telemetry": [
+      {
+        "joint": 1,
+        "actuator_torque_nm": -3.289863107863921e-19,
+        "motor_temp_c": null,
+        "foc_temp_c": null,
+        "bus_current_a": null,
+        "source": "mujoco"
+      },
+      {
+        "joint": 2,
+        "actuator_torque_nm": 0.0,
+        "motor_temp_c": null,
+        "foc_temp_c": null,
+        "bus_current_a": null,
+        "source": "mujoco"
+      },
+      {
+        "joint": 3,
+        "actuator_torque_nm": 0.0,
+        "motor_temp_c": null,
+        "foc_temp_c": null,
+        "bus_current_a": null,
+        "source": "mujoco"
+      },
+      {
+        "joint": 4,
+        "actuator_torque_nm": -1.0455466587589759e-18,
+        "motor_temp_c": null,
+        "foc_temp_c": null,
+        "bus_current_a": null,
+        "source": "mujoco"
+      },
+      {
+        "joint": 5,
+        "actuator_torque_nm": -2.189431971871876e-19,
+        "motor_temp_c": null,
+        "foc_temp_c": null,
+        "bus_current_a": null,
+        "source": "mujoco"
+      },
+      {
+        "joint": 6,
+        "actuator_torque_nm": 1.1350079298709797e-18,
+        "motor_temp_c": null,
+        "foc_temp_c": null,
+        "bus_current_a": null,
+        "source": "mujoco"
+      }
+    ]
+  },
+  "instance_id": "db9e296e-0165-4f50-9728-eda03cfccef6",
+  "exit": "drained; runtime record removed",
+  "status": "passed"
+}

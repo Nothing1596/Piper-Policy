@@ -1,5 +1,7 @@
 # Piper Policy
 
+单终端重构的启动、审批和远程连接说明见 [Robot 交互指南](docs/ROBOT-INTERACTIVE.zh.md)。软件与平台验证范围单独列在 [验证记录](docs/implementation/validation.md)。
+
 [中文](README.md) | [English](README.en.md)
 
 ## 独立发行版
