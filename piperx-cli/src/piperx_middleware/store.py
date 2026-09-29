@@ -33,7 +33,10 @@ class Store:
         )
         for ident, raw in self.db.execute("SELECT id,result FROM jobs").fetchall():
             job = json.loads(raw)
-            if job["status"] in ("accepted", "running"):
+            if job["status"] == "awaiting_approval":
+                job.update(status="cancelled", error_code="executor_restarted", error="Pending approval invalidated by executor restart; no replay.")
+                self.db.execute("UPDATE jobs SET result=? WHERE id=?", (json.dumps(job), ident))
+            elif job["status"] in ("accepted", "running"):
                 job.update(status="outcome_unknown", error="Executor restarted; command is never replayed.")
                 self.db.execute("UPDATE jobs SET result=? WHERE id=?", (json.dumps(job), ident))
         self.db.commit()

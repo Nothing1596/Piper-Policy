@@ -1,74 +1,61 @@
-# Independent robot pipeline
+# Piper Robot 0.7.1 installation
 
-[中文](ROBOT-GUIDE.zh.md)
+[中文](ROBOT-GUIDE.zh.md) · [Download](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.7.1) · [Release notes](ROBOT-RELEASE-0.7.1.md)
 
-[Complete command and feature reference](ROBOT-CLI-REFERENCE.md)
+Select a mode, connect, invoke tools, approve actions and exit in one terminal. The kit contains the robot executor, HTTP/MCP, simulation assets and source; it does not contain the video pipeline or a model service and does not flash arm firmware.
 
-For automatic Python setup and user PATH registration, see [one-click installation](ONE-CLICK-INSTALL.md). Double-click `Setup.cmd` in new kits; original ZIPs use the small add-on. The original manual entry point remains documented below.
+## Install
 
-Version 0.6.0, CLI `piper-robot`; legacy `piperx` and `piperx-mcp` remain available. This package contains the executor, CLI, HTTP/MCP, MuJoCo and robot assets. It installs no video pipeline, detector or vision-language model. The lower controller is host middleware, not arm firmware.
+Prepare **Python 3.11+ and internet access for dependencies**. Python 3.12 was used for validation. Windows CANDO requires x64 Python, including x64 emulation on Windows on ARM; vendor drivers and SDK are separate prerequisites.
 
-## Install and simulate
+Download `piper-robot-0.7.1-interactive.zip` and its `.zip.sha256`. Extract into a fresh directory. Beside `install.py`, run:
 
-Use Windows x64 and Python 3.12 x64. Extract to a fresh directory and run:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-.\piper-robot.cmd --help
-.\piper-robot.cmd sim start --root work\sim --port 8798 --seed 200
-```
-
-The installer verifies SHA256 and installs offline into `.venv`, without changing global PATH or enabling hardware. If needed, pass `-PythonExe C:\Python312\python.exe`. Reinstall rather than copying `.venv` to another machine.
-
-Leave the simulator running in terminal A. In terminal B:
+Windows (or run `Setup.cmd`):
 
 ```powershell
-.\piper-robot.cmd --root work\sim --url http://127.0.0.1:8798 connect
-.\piper-robot.cmd --root work\sim --url http://127.0.0.1:8798 status
-.\piper-robot.cmd observe --root work\sim --url http://127.0.0.1:8798 --workspace . --output work\frame-01
+py -3 install.py
+.\piper-robot.cmd
 ```
 
-The evidence directory contains RGB, depth and calibration metadata. Use new output names; evidence cannot be overwritten. Camera capture currently supports MuJoCo only. Existing roots must match backend, port and seed; use a new root when changing configuration. If a port is occupied, change it consistently in all commands.
+macOS/Linux:
 
-## Connect an agent
-
-No model API configuration is required in this package. An external agent interprets instructions and images, then invokes tools. Example stdio MCP process configuration:
-
-```json
-{
-  "mcpServers": {
-    "piper-robot": {
-      "command": "D:/PiperRobot/.venv/Scripts/python.exe",
-      "args": ["-m", "piperx_middleware.standalone_cli", "mcp", "--root", "D:/PiperRobot/work/sim", "--url", "http://127.0.0.1:8798", "--workspace", "D:/PiperRobot"]
-    }
-  }
-}
+```sh
+python3 install.py
+./piper-robot
 ```
 
-Replace paths and adapt to your client's MCP settings. Start the executor first. MCP connects to this shared owner and does not open a separate CAN connection. Tokens are read from local root files; never include them in prompts or commits. Omitting `--workspace` disables the camera tool.
+The installer creates `.venv`, downloads dependencies and checks CLI help. It does not install Python, register PATH or connect hardware. An existing `.venv` is preserved and installation stops; use a fresh extraction. Without the Windows `py` launcher, invoke `install.py` with the absolute path of your Python interpreter. Do not apply the old `installer-v1` add-on to this kit.
 
-Agent loop: `robot_status` → `robot_connect` if needed → `simulation_observe` → `move_to` / `move_by` / `move_linear` / `set_gripper` → query the returned job_id → observe again. Reuse request_id for retries of the same action; use a new ID for a new action. A job submission is not completion; check final status and fresh evidence.
+Activate the kit's virtual environment to use the bare `piper-robot` command. Otherwise replace it with `.\piper-robot.cmd` or `./piper-robot` in examples.
 
-Terminal agents can use `piper-robot --root ... --url ... <command>`. Consult each command's `--help`. Use `stop` to request a stop and `shutdown` to close the service. Process termination is not a physical emergency stop.
+## First task
 
-## Architecture
+Run the launcher, select **simulation → local**, then enter these commands separately in the same terminal:
 
 ```text
-External model/agent → CLI or MCP → HTTP client
-                                     ↓
-              shared executor: authentication/deduplication/queue/feedback/limits
-                                     ↓
-                        MuJoCo or configured CAN backend
-                                     ↓
-                             status/jobs/RGB-D evidence
+/connect
+/status
+/tools
 ```
 
-One executor owns device state. Models do not own CAN directly. Contact, successful lifting and completed placement are distinct outcomes.
+Wait for `Ready: yes`. MuJoCo is the default physical simulator. For the deterministic software demo, launch `piper-robot --root ./work/demo-one-task --simulation-backend sim`, then follow the [task walkthrough](ONE-TASK-DEMO.zh.md). It moves J1 to 5°, opens the gripper to 0.04 m and returns the joints to zero. Wait for each job to succeed before submitting the next.
 
-Install `piper-video` separately for demonstrations. An agent can connect both MCP servers, inspect a demonstration and then execute using current robot observations. Video output does not automatically become hardware commands. Combined release v0.2.1 retains the previous integrated policy entry point.
+`/manual tool(arguments)` needs no model account. `/model` displays the endpoint and MCP connection; `/model set ...` configures your OpenAI-compatible Chat Completions endpoint, and `/model check` makes an actual API request. Plain text then goes to that model. The walkthrough includes credentials-by-file examples and expected results.
 
-## Hardware and verification boundaries
+`/connect` manages the executor and ports, prompting if several devices are found. Missing CAN never silently selects simulation. Connected, feedback available and Ready are separate states; inspect `/status`, `/params` and the error before proceeding.
 
-Validate in simulation first. Real hardware additionally requires the correct platform, CAN driver, vendor SDK, robot model, calibration and on-site commissioning. `python-can` is bundled; the vendor SDK is not. Real Windows CAN execution has not been validated. See `piper-robot init --help` for initialization options and verify emergency stop/workspace arrangements before enabling hardware.
+## Approval, remote hosts and exit
 
-Standalone-package checks cover offline installation, MCP handshake, simulation connection and actual RGB-D return. Earlier colored-cube evaluations do not establish hardware acceptance. Preserve the third-party notices in `licenses`; original project code has no repository-wide license yet.
+New simulations default to `auto`; real hardware defaults to `risk`. Existing approval settings and limits are preserved. `/approval`, `/limits` and `/config` operate in the same terminal; confirm proposed configuration changes with `/confirm`. Use `/approve JOB_ID` or `/deny JOB_ID` for pending actions. `/status` and `/stop` remain available while waiting. No second-terminal OPEN window is required.
+
+`/remote` manages hosts with SSH and the matching CLI already installed; `/mode` selects mode and target. Configure SSH login and host trust first. Host-key verification stays enabled. See the [interaction guide](ROBOT-INTERACTIVE.zh.md) for details.
+
+`/quit` waits for accepted actions and cleans up a dedicated executor, or releases only this session when attached to a shared service. `/stop` requests an action stop; quitting is not an emergency stop. Query the original request_id after connection loss or an unknown result; do not resend under a new ID.
+
+MCP and HTTP use the same executor rules. Model credentials cannot change operator policy or limits. Standalone MCP/script entries remain available, but old clients without a valid control session are rejected. Use the console for the managed workflow; advanced options are in the [CLI reference](ROBOT-CLI-REFERENCE.md).
+
+## Upgrade and evidence
+
+Exit the old console, verify its dedicated executor has ended, and install a fresh extraction without copying `.venv`. Mode/host profiles are separate. Migration backs up old configuration and preserves read-only settings, limits and fault latches; it does not approve ROS commissioning.
+
+0.7.1 passed **533 tests with 6 skipped** on macOS. Fresh wheel installation, a three-action simulation through MCP/HTTP and exit cleanup passed. The first installation smoke run hit a Ready assertion without saving state; four subsequent runs did not reproduce it, and the cause remains unknown. See the [validation record](implementation/validation.md). This version has no new Windows/Linux or physical-robot acceptance. Camera calibration, collision planning and hardware task success rates remain outside these results.

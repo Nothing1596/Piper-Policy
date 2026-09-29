@@ -1,83 +1,61 @@
-# 下位机管线独立部署指南
+# Piper Robot 0.7.1 部署指南
 
-[English](ROBOT-GUIDE.en.md)
+[English](ROBOT-GUIDE.en.md) · [下载](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.7.1) · [版本说明](ROBOT-RELEASE-0.7.1.md)
 
-[完整命令与功能参考](ROBOT-CLI-REFERENCE.md)
+一个终端完成选择模式、连接、工具调用、审批和退出。此包包含机器人执行器、HTTP/MCP、仿真资源和源码，不包含视频解析管线或模型服务，也不会刷写机械臂固件。
 
-更简单的入口：[一键安装与命令注册](ONE-CLICK-INSTALL.md)。新包双击 `Setup.cmd`；原版 ZIP 使用该页的小型补充包。它自动检测/安装 Python 并注册用户 PATH。下面保留原版手动入口说明。
+## 安装
 
-版本 0.6.0，入口 `piper-robot`，原 `piperx` / `piperx-mcp` 仍可用。此包独立安装共享执行器、CLI、HTTP/MCP、MuJoCo 和机械臂模型，不安装视频解析包、检测器或视觉大模型。这里的“下位机”指主机上的控制中间件，不是机械臂固件。
+准备 **Python 3.11+ 和可下载依赖的网络**，推荐使用已验证的 Python 3.12。Windows CANDO 后端要求 x64 Python（WOA 使用 x64 模拟），厂商驱动和 SDK 另外准备。
 
-## 1. 安装
+下载 `piper-robot-0.7.1-interactive.zip` 及 `.zip.sha256`。解压到新目录，在包含 `install.py` 的目录运行：
 
-准备 Windows x64 和 Python 3.12 x64。解压到新目录，在目录中运行：
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-.\piper-robot.cmd --help
-```
-
-安装器核对 SHA256，离线安装到 `.venv`，不修改全局 PATH。无 `py` 启动器时传 `-PythonExe C:\Python312\python.exe`。新机器重新安装，不复制已有 `.venv`。安装本身不会接通或使能真实机械臂。
-
-## 2. 启动仿真并连接
-
-终端 A，保持运行：
+Windows（也可运行 `Setup.cmd`）：
 
 ```powershell
-.\piper-robot.cmd sim start --root work\sim --port 8798 --seed 200
+py -3 install.py
+.\piper-robot.cmd
 ```
 
-终端 B：
+macOS/Linux：
 
-```powershell
-.\piper-robot.cmd --root work\sim --url http://127.0.0.1:8798 connect
-.\piper-robot.cmd --root work\sim --url http://127.0.0.1:8798 status
-.\piper-robot.cmd observe --root work\sim --url http://127.0.0.1:8798 --workspace . --output work\frame-01
+```sh
+python3 install.py
+./piper-robot
 ```
 
-`frame-01` 包含 RGB、深度和标定信息。每次使用新输出目录，防止覆盖证据。`observe` 当前仅支持 MuJoCo 相机。启动器检查已有 root 的后端、端口和种子；改变参数请使用新 root。端口已占用时换端口，所有命令需同步修改。
+安装器创建包内 `.venv`，联网安装依赖并检查 CLI 帮助。不自动安装 Python、不注册 PATH、不连接机器人；已存在 `.venv` 时拒绝覆盖。如果没有 Windows `py` 启动器，用已安装的 Python 绝对路径执行 `install.py`。
 
-## 3. 接入模型或代理
+若需裸命令 `piper-robot`，可激活该虚拟环境后使用。下文的裸命令在未激活时替换为 `.\piper-robot.cmd` 或 `./piper-robot`。不要将旧 `installer-v1` 补充包覆盖到本包。
 
-此包本身不需要配置模型。Codex、Claude Code 或其他代理负责理解用户指令和看图，通过 MCP/终端调用工具。std​io 配置示例：
+## 跑通一次任务
 
-```json
-{
-  "mcpServers": {
-    "piper-robot": {
-      "command": "D:/PiperRobot/.venv/Scripts/python.exe",
-      "args": ["-m", "piperx_middleware.standalone_cli", "mcp", "--root", "D:/PiperRobot/work/sim", "--url", "http://127.0.0.1:8798", "--workspace", "D:/PiperRobot"]
-    }
-  }
-}
-```
-
-替换绝对路径，并按客户端的 MCP 设置填写命令和参数。先启动执行器；MCP 桥只连接它，不另开 CAN。token 从 root 的本地文件读取，不要把 token 放进提示词或仓库。省略 `--workspace` 时不暴露取图工具。
-
-代理流程：调用 `robot_status` → 必要时 `robot_connect` → `simulation_observe` 看当前图像 → 用 `move_to`、`move_by`、`move_linear`、`set_gripper` 等工具动作 → 查询返回的 job_id → 再取图复核。相同动作重试沿用 request_id，新的动作使用新 ID。调用返回 job_id 只代表已提交，必须检查最终完成状态和画面。
-
-终端路径也可用：`piper-robot --root ... --url ... <命令>`。各子命令参数用 `--help` 查询。停止用 `stop`，关闭服务用 `shutdown`；不要把进程退出等同于物理急停。
-
-## 4. 结构
+启动后选择 **仿真 → 本机**，然后在同一终端逐条输入：
 
 ```text
-外部模型/代理
-   ├─ piper-robot CLI
-   └─ MCP 工具 → HTTP 客户端
-                 ↓
-       单一共享执行器：认证/请求去重/队列/反馈/限位
-                 ↓
-       MuJoCo 仿真 或 配置后的真实 CAN 后端
-                 ↓
-             状态 / job / RGB-D 证据
+/connect
+/status
+/tools
 ```
 
-执行器统一持有连接和动作状态。模型不直接占用 CAN。动作前需要校验当前反馈、坐标和范围；抓手接触、抬起成功和最终摆放成功是不同条件。
+等 `Ready: yes` 后再发送动作。默认 MuJoCo 提供物理仿真；确定性软件演示可用 `piper-robot --root ./work/demo-one-task --simulation-backend sim` 启动新配置，完整操作见 [单次任务演示](ONE-TASK-DEMO.zh.md)。
 
-视频示范管线另外安装 `piper-video`。一个代理可同时连接两边 MCP：先读示范，再看当前机器人画面执行。视频解析结果不会自动转换成硬件指令，也不替代实时闭环。原联合包 v0.2.1 仍提供旧的一体化策略入口。
+`/manual 工具名(参数)` 手动调用不需要模型。`/model` 查看模型配置与 MCP 连接，`/model set ...` 保存自己的 OpenAI 兼容 Chat Completions 端点，`/model check` 实际测试模型 API；之后普通文本交给模型处理。手动操作、模型输入、每步预期结果都在演示文档中。
 
-## 5. 真机与验收范围
+`/connect` 自动管理执行器和端口，并在多设备时询问选择；没有 CAN 不会悄悄切回仿真。连接成功、反馈存在和 Ready 是不同状态；未 Ready 时查看 `/status`、`/params` 与错误提示。
 
-先完成上述仿真。真实 CAN 后端需要对应平台、驱动、厂商 SDK、正确机械臂型号以及现场标定；这些不因离线包安装成功而具备。Windows 包包含 `python-can`，不包含厂商 SDK，也未验证 Windows 上真实 CAN 执行。用 `piper-robot init --help` 查看初始化选项，正式使能前按设备现场流程核对急停与工作空间。
+## 审批、远程与退出
 
-本版本的独立包验证覆盖离线安装、MCP 握手、仿真连接和真实 RGB-D 回传；历史彩块任务结果不扩展为真机验收。包中 `licenses` 保留机械臂模型等第三方许可；原创代码尚未指定统一许可证。
+新仿真默认 `auto`，真机默认 `risk`；已有配置保留原审批和限位。`/approval`、`/limits`、`/config` 都在当前终端操作，配置修改通过 `/confirm` 确认。动作等待审批时使用 `/approve JOB_ID` 或 `/deny JOB_ID`，仍可 `/status` 或 `/stop`。不再需要另开终端输入 OPEN。
+
+`/remote` 管理已安装 SSH 和同版本 CLI 的远端，`/mode` 切换模式和目标。SSH 信任及登录需要先配置好；程序不跳过主机密钥验证。详细语法见 [交互指南](ROBOT-INTERACTIVE.zh.md)。
+
+`/quit` 等待已接受动作结束，清理本次专用执行器；共享服务只释放当前控制会话。需要停止动作时用 `/stop`；退出不是急停。失联或结果未知时查询原 request_id，不能换新编号重发。
+
+模型经 MCP/HTTP 调用同一执行器，不能修改操作员审批与限制。独立 MCP 和脚本入口保留，但新会话规则同样生效：旧客户端缺少有效控制会话会被拒绝。普通用户优先使用单终端入口；高级参数见 [CLI 参考](ROBOT-CLI-REFERENCE.md)。
+
+## 升级与验证范围
+
+退出旧前端，确认本次专用执行器已清理，将新版解压到新目录重新安装；不要复制旧 `.venv`。配置按模式和目标隔离；旧配置先备份再迁移，保留只读、限位和故障锁存。ROS commissioning 不会自动改为已通过。
+
+0.7.1 在 macOS 上通过 **533 项测试，6 项跳过**，新 wheel 安装、MCP/HTTP 仿真三步动作和退出清理通过。首次安装冒烟有一次未捕获状态的 Ready 断言失败，后续四次未复现，原因尚未确定。详见 [验证记录](implementation/validation.md)。本版未重新完成 Windows/Linux 或真实机械臂验收；相机标定、碰撞规划、真机动作成功率不在本版证据内。

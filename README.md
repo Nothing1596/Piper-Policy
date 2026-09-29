@@ -1,19 +1,31 @@
 # Piper Policy
 
+当前下位机版本 **[0.7.1](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.7.1)**。推荐入口 `piper-robot`；`piperx` 和脚本入口继续兼容。[安装步骤](docs/ROBOT-GUIDE.zh.md) · [本版变化](docs/ROBOT-RELEASE-0.7.1.md)。
+
+```sh
+piper-robot
+```
+
+选择仿真 → 本机，输入 `/connect`；随后 `/tools` 查看工具，`/manual 工具名(参数)` 调用，`/quit` 退出。新仿真默认自动执行合法动作，不需要先配置审批阈值；真机默认风险动作确认。模型配置是可选的，手动调用不需要 API key。
+
+可照着操作：[单次任务演示：手动命令与模型调用](docs/ONE-TASK-DEMO.zh.md)。
+
+单终端重构的启动、审批和远程连接说明见 [Robot 交互指南](docs/ROBOT-INTERACTIVE.zh.md)。软件与平台验证范围单独列在 [验证记录](docs/implementation/validation.md)。
+
 [中文](README.md) | [English](README.en.md)
 
 ## 独立发行版
 
 [无需 Codex：DeepSeek API 配置步骤（下位机 0.6.1 更新）](docs/DEEPSEEK-SETUP.zh.md)
 
-**[Windows 一键安装与 CLI 注册](docs/ONE-CLICK-INSTALL.md)**：双击 `Setup.cmd`，自动处理 Python、虚拟环境和依赖，注册用户 PATH。原独立 ZIP 可使用小型安装补充包。
+**下位机 0.7.1 安装：** 先准备 Python 3.11+，解压后 Windows 运行 `Setup.cmd`，macOS/Linux 运行 `python3 install.py`。安装时联网下载依赖；不自动安装 Python 或注册 PATH。随后使用包内 `piper-robot.cmd` / `./piper-robot`。[旧包的一键安装补充说明](docs/ONE-CLICK-INSTALL.md) 仅适用于 video 0.3.0 / robot 0.6.x。
 
 视频管线和下位机管线现在分别发布，各有 CLI 和 MCP。两个安装器各自创建 `.venv`，无需安装另一包。
 
 | 安装包 | 独立入口 | 部署向导 |
 |---|---|---|
 | [视频 v0.3.0](https://github.com/Nothing1596/Piper-Policy/releases/tag/video-v0.3.0) | `piper-video` / `piper-video mcp` | [中文](docs/VIDEO-GUIDE.zh.md) / [English](docs/VIDEO-GUIDE.en.md) |
-| [下位机 v0.6.0](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.6.0) | `piper-robot` / `piper-robot mcp` | [中文](docs/ROBOT-GUIDE.zh.md) / [English](docs/ROBOT-GUIDE.en.md) |
+| [下位机 v0.7.1](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.7.1) | `piper-robot` / `piper-robot mcp` | [中文](docs/ROBOT-GUIDE.zh.md) / [English](docs/ROBOT-GUIDE.en.md) |
 
 **命令与功能参考：** [视频 CLI](docs/VIDEO-CLI-REFERENCE.md) · [下位机 CLI](docs/ROBOT-CLI-REFERENCE.md)。包含完整命令索引、参数、默认值、单位、调用示例、MCP 工具和实际 `--help` 输出。
 

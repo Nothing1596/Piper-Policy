@@ -2,18 +2,20 @@
 
 [中文](README.md) | [English](README.en.md)
 
+Current robot release: **[0.7.1](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.7.1)**. Run `piper-robot`, choose simulation and local, then use `/connect`, `/tools`, `/manual tool(arguments)` and `/quit` in one terminal. Manual tools do not need a model API key. [Installation](docs/ROBOT-GUIDE.en.md) · [Task walkthrough (Chinese)](docs/ONE-TASK-DEMO.zh.md) · [Release notes](docs/ROBOT-RELEASE-0.7.1.md).
+
 ## Independent releases
 
 [DeepSeek API setup without Codex (Chinese guide; robot 0.6.1 update)](docs/DEEPSEEK-SETUP.zh.md)
 
-**[Windows one-click installation and CLI registration](docs/ONE-CLICK-INSTALL.md)**: double-click `Setup.cmd` to handle Python, the environment, dependencies and user PATH. An installer add-on supports the original standalone ZIPs.
+**Robot 0.7.1 installation:** prepare Python 3.11+, extract the kit, then run `Setup.cmd` on Windows or `python3 install.py` on macOS/Linux. Dependencies download during installation. Python and PATH registration are not automated; launch the bundled `piper-robot.cmd` / `./piper-robot`. The [older installer add-on](docs/ONE-CLICK-INSTALL.md) applies only to video 0.3.0 / robot 0.6.x.
 
 The video and robot pipelines now ship separately, each with its own CLI and MCP. Each installer creates an isolated `.venv` without requiring the other package.
 
 | Kit | Entry points | Guide |
 |---|---|---|
 | [Video v0.3.0](https://github.com/Nothing1596/Piper-Policy/releases/tag/video-v0.3.0) | `piper-video` / `piper-video mcp` | [English](docs/VIDEO-GUIDE.en.md) / [中文](docs/VIDEO-GUIDE.zh.md) |
-| [Robot v0.6.0](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.6.0) | `piper-robot` / `piper-robot mcp` | [English](docs/ROBOT-GUIDE.en.md) / [中文](docs/ROBOT-GUIDE.zh.md) |
+| [Robot v0.7.1](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.7.1) | `piper-robot` / `piper-robot mcp` | [English](docs/ROBOT-GUIDE.en.md) / [中文](docs/ROBOT-GUIDE.zh.md) |
 
 **Command and feature references:** [Video CLI](docs/VIDEO-CLI-REFERENCE.md) · [Robot CLI](docs/ROBOT-CLI-REFERENCE.md). These bilingual references include command inventories, parameters, defaults, units, examples, MCP tools and actual `--help` output.
 

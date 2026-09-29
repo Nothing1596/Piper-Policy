@@ -179,6 +179,11 @@ def test_native_service_verifies_tcp_and_requires_explicit_return_to_joint_mode(
     b = NativeFixture()
     b.q = [0.,45.,-60.,0.,20.,0.]
     s = RobotService(b, Settings(backend="agx", data_dir=tmp_path))
+    from piperx_middleware.request_context import control_session_id
+    from piperx_middleware.interaction_types import InteractionPolicy
+    session = s.acquire_session("offline-native-test")
+    context = control_session_id.set(session["session_id"])
+    s.configure_interaction(InteractionPolicy(mode="auto"))
     try:
         s.connect()
         xyz = PiperKinematics().pose(b.q)["xyz_m"]
@@ -188,7 +193,9 @@ def test_native_service_verifies_tcp_and_requires_explicit_return_to_joint_mode(
         assert j["resolution"]["path_semantics"] == "controller_move_l"
         assert s.state()["not_ready_reason"]["code"] == "control_mode"
         assert wait(s, s.move(ControlMode(), "return-mode-001"))["status"] == "succeeded"
-    finally: s.close()
+    finally:
+        s.close()
+        control_session_id.reset(context)
 
 
 def test_readonly_rejects_commands(service):

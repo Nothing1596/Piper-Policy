@@ -282,21 +282,23 @@ def test_emergency_stop_holds_without_teleport(backend):
     backend.joint_target(target)
     time.sleep(0.1)
 
-    # Capture state immediately before estop
-    s_before = backend.snapshot()
-    q_before = s_before.q_deg.copy()
-
-    # Trigger emergency stop
-    backend.emergency_stop()
-    assert backend.estopped
-
-    # Immediate state after emergency stop must not be reset to zeros or default
-    s_after = backend.snapshot()
-    max_jump = max(abs(a - b) for a, b in zip(s_after.q_deg, q_before))
-    assert max_jump < 1.0, f"Emergency stop teleported position by {max_jump:g} deg!"
-
-    # Verify actuator ctrl was set to measured position
+    # Compare the stop transition atomically: subsequent physics integration
+    # may change qpos while the captured actuator hold target stays fixed.
     with backend.lock:
+        # Capture state immediately before estop
+        s_before = backend.snapshot()
+        q_before = s_before.q_deg.copy()
+
+        # Trigger emergency stop
+        backend.emergency_stop()
+        assert backend.estopped
+
+        # Immediate state after emergency stop must not be reset to zeros or default
+        s_after = backend.snapshot()
+        max_jump = max(abs(a - b) for a, b in zip(s_after.q_deg, q_before))
+        assert max_jump < 1.0, f"Emergency stop teleported position by {max_jump:g} deg!"
+
+        # Verify actuator ctrl was set to measured position
         for i, q_idx in enumerate(backend.arm_qpos_indices):
             expected_ctrl = float(backend.data.qpos[q_idx])
             actual_ctrl = float(backend.data.ctrl[backend.arm_act_indices[i]])

@@ -1,12 +1,27 @@
 # piper-robot 命令与功能 / Command reference
 
-适用 **0.6.0**。[返回中文 README](../README.md) · [English README](../README.en.md) · [安装向导](ROBOT-GUIDE.zh.md) · [Installation guide](ROBOT-GUIDE.en.md)
+适用 **0.7.1**。[中文安装](ROBOT-GUIDE.zh.md) · [English installation](ROBOT-GUIDE.en.md) · [单次任务演示](ONE-TASK-DEMO.zh.md)
 
-Windows 离线包入口 `.\piper-robot.cmd`；安装环境中也可用 `piper-robot`。保留 `piperx` 与 `piperx-mcp` 旧入口。The lower controller is host middleware, not arm firmware.
+## 推荐：单终端 / Recommended console
 
-## 两类语法 / Invocation forms
+安装后运行 `piper-robot`，选择仿真/真机和本机/远端。包内入口为 Windows 的 `.\piper-robot.cmd` 或 macOS/Linux 的 `./piper-robot`；安装不自动注册 PATH。Start the console, choose mode and target, and operate in one terminal.
 
-包装命令的参数放在命令后；执行器命令的全局参数放在命令前：
+```text
+piper-robot
+# 选择仿真、本机后逐条输入 / Select simulation and local, then enter:
+/connect
+/status
+/tools
+/quit
+```
+
+完整命令包括 `/manual`、`/model`、`/approval`、`/limits`、`/config`、`/remote`、`/mode`、`/approve`、`/deny`、`/confirm`、`/cancel`、`/stop`、`/shutdown`。见 [交互指南](ROBOT-INTERACTIVE.zh.md)。No backend ports or second-terminal OPEN windows are needed.
+
+没有 TTY 的控制台启动须显式指定 `--mode simulation` 或 `--mode real`。`--simulation-backend sim` 选择确定性测试替身，默认 `mujoco` 是物理仿真。`--root DIR` 选择前端数据根目录，模式与目标配置分开保存。`/quit` 等待已接受动作结束并清理专用执行器，附着共享服务时只释放本会话；退出不是急停。
+
+## 兼容脚本与独立 MCP / Script and MCP compatibility
+
+以下参数表用于已有脚本和独立托管服务，不是普通交互用户的连接步骤。包装命令参数在命令后，执行器全局参数在命令前：
 
 ```text
 piper-robot sim start --root DIR [--port 8798] [--seed 200]
@@ -15,30 +30,11 @@ piper-robot mcp [--root DIR] [--url URL] [--token-file FILE] [--workspace DIR]
 piper-robot [--root DIR] [--url URL] [--token-file FILE] COMMAND [ARGS]
 ```
 
-`sim start`、`observe`、`mcp` 使用各自的参数解析器。不要写成 `piper-robot --root DIR sim start`。The wrapper commands have their own parsers; executor global flags precede its command.
+`sim start`、`observe`、`mcp` 使用独立解析器；不要写成 `piper-robot --root DIR sim start`。脚本/MCP 的 root 是执行器配置目录，不是前端 profiles 的父目录。These entries do not provide the console's managed lifecycle by themselves.
 
-执行器默认 root：Windows `%LOCALAPPDATA%/PiperXMiddleware`；其他平台 `~/.local/state/piperx-middleware`。常规控制命令的 URL 顺序：显式 `--url` → `PIPERX_URL` → root 配置 → `http://127.0.0.1:8765`。独立 `mcp` / `observe` 使用 RobotClient 默认地址，不自动套用 sim 的 8798 端口；建议始终显式传 `--url`。
+执行器默认 root 为 Windows `%LOCALAPPDATA%/PiperXMiddleware`、其他平台 `~/.local/state/piperx-middleware`。脚本 URL 顺序为显式 `--url` → `PIPERX_URL` → 本地配置 → `http://127.0.0.1:8765`；独立 MCP/observe 不自动读取 sim 的 8798 端口。`init`/`serve` 使用本地配置，不接受全局 URL/token；`init` 后端 sim/mujoco/agx 分别为软件替身、物理仿真、真机。
 
-`init` / `serve` 使用本地 root/config，不接受全局 `--url` 或 `--token-file`。`init --backend sim` 是轻量模拟；`mujoco` 才是物理仿真；`agx` 是真实后端。默认 init 端口 8765，与 `sim start` 默认 8798 不同。
-
-## 仿真例子 / Simulation example
-
-终端 A / Terminal A:
-
-```powershell
-.\piper-robot.cmd sim start --root work\sim --port 8798 --seed 200
-```
-
-终端 B / Terminal B:
-
-```powershell
-.\piper-robot.cmd --root work\sim --url http://127.0.0.1:8798 connect
-.\piper-robot.cmd --root work\sim --url http://127.0.0.1:8798 status --json
-.\piper-robot.cmd observe --root work\sim --url http://127.0.0.1:8798 --workspace . --output work\frame-01
-.\piper-robot.cmd --root work\sim --url http://127.0.0.1:8798 jobs --json
-.\piper-robot.cmd --root work\sim --url http://127.0.0.1:8798 stop
-.\piper-robot.cmd --root work\sim --url http://127.0.0.1:8798 shutdown
-```
+**保留入口不等于免审执行。** 独立客户端仍需有效控制会话，MCP 桥可通过 `PIPERX_CONTROL_SESSION` 接收会话；创建和心跳由其控制端管理。单独运行旧 `arm` 时间窗口不会代替新会话，缺少会话时会明确拒绝动作。新交互前端自动维护这些状态。HTTP/MCP cannot bypass approval, limits or session checks.
 
 ## 单位、动作与反馈 / Units and execution
 
@@ -53,7 +49,7 @@ piper-robot [--root DIR] [--url URL] [--token-file FILE] COMMAND [ARGS]
 
 `move-to` / `move-by` / `rotate` 是 IK 求解后的关节空间端点运动，不保证 TCP 走直线；没有通用碰撞规划。`move-linear` 的采样检查也不等于连续路径无碰撞证明。RPY 使用 extrinsic xyz，即 Rz@Ry@Rx。
 
-动作命令通常有 `--request-id`、`--wait`、`--wait-timeout`（默认 130 秒）。未给 ID 时生成一次并写到 stderr；同一动作重试沿用原 ID。`--speed` 默认 5%，动作 `--timeout` 默认 30 秒。`gripper` 没有 speed；`execute` 使用已有计划。
+动作命令通常有 `--request-id`、`--wait`、`--wait-timeout`（默认 130 秒）。未给 ID 时生成一次并写到 stderr；结果未知时按原 ID 查询，不自动重发动作。`--speed` 默认 5%，动作 `--timeout` 默认 30 秒。`gripper` 没有 speed；`execute` 使用已有计划。
 
 提交成功返回 job_id，不代表动作完成。`job ID --wait` / `request ID --wait` 查询结果。等待超时返回 outcome_unknown，不自动停机、撤销或重放。`--output FILE` 独占创建 JSON 文件；多数脚本命令 stdout 是 JSON。失败/取消/未知等结果返回非零。Status summaries default to readable text; use `--json` for scripts.
 
@@ -65,21 +61,9 @@ piper-robot [--root DIR] [--url URL] [--token-file FILE] COMMAND [ARGS]
 
 `model`（单数）是下位机自己的 OpenAI-compatible 文本/工具调用入口，不是视频侧的 `models`，也不是多供应商视频配置。Configuration lives in root/model.json; it stores credential references, not key values.
 
-```powershell
-.\piper-robot.cmd --root work\sim model set --endpoint http://127.0.0.1:1234/v1 --name YOUR_MODEL --api-key-env PIPERX_MODEL_API_KEY
-.\piper-robot.cmd --root work\sim model show
-.\piper-robot.cmd --root work\sim model list
-.\piper-robot.cmd --root work\sim model check
-.\piper-robot.cmd --root work\sim --url http://127.0.0.1:8798 model run "只读取并总结当前状态"
-.\piper-robot.cmd --root work\sim --url http://127.0.0.1:8798 manual "robot_status()"
-.\piper-robot.cmd --root work\sim --url http://127.0.0.1:8798 shell
-```
+在交互前端使用 `/model`、`/model set endpoint=... model=... api_key_file=...` 和 `/model check`。`check` 发起最小真实补全请求；配置存在不证明模型或工具调用可用。随后普通文本交给模型；手动 `/manual 工具名(参数)` 不依赖模型。详细例子见 [单次任务演示](ONE-TASK-DEMO.zh.md)。
 
-`model check` 会发起一次不带工具的最小真实补全请求，不只是检查配置。`control-mode` 固定请求 CAN/MOVE_J 控制切换，不接受任意模式或使能/复位字段。
-
-`model run --allow-motion` 显式允许该回合提出动作，仍受后端权限和校验限制。`show/set` 不证明模型可用。内置回合不等同于视频理解或完整视觉策略。要让外部视觉代理看图，请使用下述带 workspace 的独立 MCP。
-
-交互命令 / Console commands: `/help`, `/status`, `/connect`, `/disconnect`, `/model`, `/manual`, `/tools`, `/calls`, `/jobs`, `/params`, `/stop`, `/quit`。`/quit` 不会停止机器人或断开 CAN。直接 `piper-robot` 显示帮助；使用 `shell` 明确进入交互终端。
+脚本 `model run --allow-motion` 仅允许该回合提出动作，仍须满足后端会话和审批规则。内置文本/工具回合不等同于视频理解或完整视觉策略。`control-mode` 固定请求 CAN/MOVE_J，不接受任意模式、使能或复位字段。
 
 ## MCP 工具 / MCP tools
 
@@ -102,7 +86,7 @@ piper-robot [--root DIR] [--url URL] [--token-file FILE] COMMAND [ARGS]
 
 常规 MCP 运动 speed 默认 5%、timeout 默认 30 秒；夹爪默认 10 秒。以客户端 `tools/list` 的完整 schema 为准，CLI 与 MCP 并非逐参数等价。Tool calls return jobs; agents must check completion and fresh images.
 
-支持命令不等于已完成真机验收。SDK、CAN 驱动、标定需现场部署；独立包已验证的范围见 [验收记录](SPLIT-VALIDATION.md)。Supported commands do not establish physical hardware acceptance.
+支持命令不等于已完成真机验收。SDK、CAN 驱动、标定需现场部署；本版验证范围见 [验收记录](implementation/validation.md)。Supported commands do not establish physical hardware acceptance.
 
 ## 命令索引 / Command index
 
@@ -154,13 +138,15 @@ piper-robot [--root DIR] [--url URL] [--token-file FILE] COMMAND [ARGS]
 
 ## 完整参数 / Exact help snapshots
 
-以下内容来自对应发行版的实际 `--help`，未启动后端或调用模型。Generated from installed release help, without starting a backend or calling a model. Video subcommand help retains the legacy `piper-lab demo` program label; invoke it as `piper-video` followed by the listed command.
+以下内容来自 0.7.1 的实际 `--help`，未启动后端或调用模型。Generated from the current CLI help without starting a backend or calling a model.
 
 <details>
 <summary>piper-robot --help</summary>
 
 ```text
 usage: cli.py [-h] [--root ROOT] [--url URL] [--token-file TOKEN_FILE]
+              [--mode {simulation,real}] [--target TARGET]
+              [--simulation-backend {sim,mujoco}]
               {shell,init,serve,state,connect,disconnect,stop,shutdown,arm,status,monitor,tools,params,calls,jobs,clear-estop,configure-runtime,control-mode,devices,doctor,estop,events,execute,gripper,job,limits,manual,move-by,move-joints,move-linear,move-to,preview,request,rotate,sim-fault,model}
               ...
 
@@ -219,6 +205,10 @@ options:
                         Bearer token file for the console and inspection
                         commands (env PIPERX_TOKEN_FILE; default:
                         <root>/model.token)
+  --mode {simulation,real}
+                        Explicit startup mode; required without a TTY
+  --target TARGET       Local executor or saved SSH target
+  --simulation-backend {sim,mujoco}
 piper-robot: sim start | observe | mcp | [--root DIR] <executor command>
 Use sim --help, observe --help, mcp --help, or the executor help below.
 ```
@@ -313,11 +303,13 @@ options:
 <summary>piper-robot serve --help</summary>
 
 ```text
-usage: cli.py serve [-h] [--config CONFIG] [--allow-motion | --read-only]
+usage: cli.py serve [-h] [--config CONFIG] [--managed]
+                    [--allow-motion | --read-only]
 
 options:
   -h, --help       show this help message and exit
   --config CONFIG
+  --managed        Private lifecycle-managed executor with automatic port
   --allow-motion   Enable configured action tools
   --read-only      Run observations only
 ```

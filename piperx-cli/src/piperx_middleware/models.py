@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
+from .interaction_types import InteractionPolicy
 
 Number = Annotated[float, Field(strict=True, allow_inf_nan=False)]
 
@@ -14,10 +15,13 @@ class StrictModel(BaseModel):
 
 class Settings(StrictModel):
     backend: Literal["sim", "agx", "mujoco"] = "sim"
+    managed_control: bool = Field(default=False, strict=True)
+    managed_profile_id: str | None = None
+    interaction_policy: InteractionPolicy | None = None
     simulation_seed: int = 0
     simulation_asset: Path | None = None
     host: str = "127.0.0.1"
-    port: int = Field(default=8765, ge=1024, le=65535)
+    port: int = Field(default=8765, ge=0, le=65535)
     data_dir: Path = Path(".runtime")
     sdk_root: Path | None = None
     cando_source: Path | None = None
@@ -26,7 +30,7 @@ class Settings(StrictModel):
     cando_device_index: int | None = Field(default=None, ge=0, le=254, strict=True)
     firmware_profile: Literal["v189"] = "v189"
     control_profile: Literal["direct", "calibration"] = "direct"
-    allow_motion: bool = True
+    allow_motion: bool = Field(default=True, strict=True)
     connect_timeout_s: FiniteFloat = Field(default=2.0, gt=0, le=30)
     max_speed_percent: int = Field(default=1, ge=0, le=100)
     max_move_deg: FiniteFloat = Field(default=3.0, gt=0, le=30)

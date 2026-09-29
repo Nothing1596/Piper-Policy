@@ -18,7 +18,19 @@ MAX_STRING_LENGTH = 10000
 MAX_TOTAL_LENGTH = 100000
 
 
-def _validate_bounded(val: Any, depth: int = 0, state: dict[str, int] | None = None) -> None:
+def validate_literal(
+    val: Any, depth: int = 0, state: dict[str, int] | None = None, *,
+    max_string_length: int = MAX_STRING_LENGTH,
+    max_list_size: int = MAX_COLLECTION_SIZE,
+    max_total_length: int = MAX_TOTAL_LENGTH,
+) -> None:
+    """Shared JSON-literal rules; callers retain their existing payload budgets."""
+    def visit(child: Any) -> None:
+        validate_literal(child, depth + 1, state,
+                         max_string_length=max_string_length,
+                         max_list_size=max_list_size,
+                         max_total_length=max_total_length)
+
     if state is None:
         state = {"total_length": 0}
 
@@ -40,18 +52,18 @@ def _validate_bounded(val: Any, depth: int = 0, state: dict[str, int] | None = N
         return
 
     if isinstance(val, str):
-        if len(val) > MAX_STRING_LENGTH:
+        if len(val) > max_string_length:
             raise ValueError(f"String value exceeds maximum allowed length: {len(val)}")
         state["total_length"] += len(val)
-        if state["total_length"] > MAX_TOTAL_LENGTH:
+        if state["total_length"] > max_total_length:
             raise ValueError("Total input string length exceeds limit")
         return
 
     if isinstance(val, list):
-        if len(val) > MAX_COLLECTION_SIZE:
+        if len(val) > max_list_size:
             raise ValueError(f"Collection exceeds maximum allowed size: {len(val)}")
         for elem in val:
-            _validate_bounded(elem, depth + 1, state)
+            visit(elem)
         return
 
     if isinstance(val, dict):
@@ -63,9 +75,9 @@ def _validate_bounded(val: Any, depth: int = 0, state: dict[str, int] | None = N
             if len(k) > 1000:
                 raise ValueError("Dictionary key exceeds maximum allowed length")
             state["total_length"] += len(k)
-            if state["total_length"] > MAX_TOTAL_LENGTH:
+            if state["total_length"] > max_total_length:
                 raise ValueError("Total input string length exceeds limit")
-            _validate_bounded(v, depth + 1, state)
+            visit(v)
         return
 
     raise ValueError(f"Unsupported value type in manual command: {type(val).__name__}")
@@ -79,7 +91,7 @@ def _eval_bounded_literal(node: ast.AST) -> Any:
     except Exception as exc:
         raw = getattr(node, "id", None) or type(node).__name__
         raise ValueError(f"Argument value must be a static literal, got: {raw}") from exc
-    _validate_bounded(val)
+    validate_literal(val)
     return val
 
 

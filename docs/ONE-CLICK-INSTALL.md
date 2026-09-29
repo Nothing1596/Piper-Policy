@@ -2,7 +2,9 @@
 
 [中文 README](../README.md) · [English README](../README.en.md)
 
-适用独立视频包和下位机包，不适用旧联合包。只负责安装与命令注册，不启动机器人或模型。
+**本页仅适用于 video 0.3.0 / robot 0.6.x 的历史安装器，不适用于 robot 0.7.1。** 新版机器人包请按 [0.7.1 安装指南](ROBOT-GUIDE.zh.md) 使用 `install.py` / `Setup.cmd`：预装 Python，联网安装依赖，不自动注册 PATH。不要将旧安装补充包覆盖到新版目录。
+
+This page describes the historical video 0.3.0 / robot 0.6.x installer only. For robot 0.7.1 use the [current guide](ROBOT-GUIDE.en.md). The scripts below only install/register commands; they do not start robots or models.
 
 ## 使用 / Use
 
