@@ -3,10 +3,12 @@
 新部署按需要选择一个或两个独立包：
 
 - [视频管线 0.3.0 向导](docs/VIDEO-GUIDE.zh.md)：`piper-video`，选帧、模型 API、证据、MCP。
-- [下位机管线 0.6.0 向导](docs/ROBOT-GUIDE.zh.md)：`piper-robot`，执行器、仿真、相机、动作、MCP。
+- [下位机管线 0.7.1 向导](docs/ROBOT-GUIDE.zh.md)：`piper-robot`，执行器、仿真、相机、动作、MCP。
 - 英文说明见 [English README](README.en.md)。
 
-两包均解压后执行自己的 `install.ps1`，不共享虚拟环境。模型代理可以连接两个 MCP 或直接调用 CLI。
+下位机 0.7.1 需要 Python 3.11+ 和网络：解压到新目录，Windows 运行 `Setup.cmd`，macOS/Linux 运行 `python3 install.py`。随后启动包内 `piper-robot.cmd` / `./piper-robot`，选择仿真、本机，输入 `/connect`。不需要另开终端或填写后端端口。可直接照着 [单次任务演示](docs/ONE-TASK-DEMO.zh.md) 操作。
+
+视频 0.3.0 仍使用自己的 `install.ps1`，两包不共享虚拟环境。下位机新包不包含 Python、不自动注册 PATH，也不是离线依赖包。
 
 ## 原联合包 0.2.1
 

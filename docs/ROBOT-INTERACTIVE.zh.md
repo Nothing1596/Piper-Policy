@@ -1,8 +1,12 @@
-# Piper Robot 单终端操作（源码 0.7.1）
+# Piper Robot 单终端操作（0.7.1）
 
 想先完整跑一遍？见 [单次任务演示：用户命令与模型工具调用](ONE-TASK-DEMO.zh.md)。
 
 本次重构将仿真和真机配置分开。ROS `piper-lab/config/hardware.yaml` 的 commissioning 不属于这个终端，不会自动修改为 `true`。
+
+## 安装发行包
+
+需要 Python 3.11+ 和网络。解压到新目录后，Windows 运行 `py -3 install.py`（或 `Setup.cmd`），macOS/Linux 运行 `python3 install.py`。随后用 `.\piper-robot.cmd` / `./piper-robot` 启动；激活包内 `.venv` 后也可使用裸命令 `piper-robot`。安装器不安装 Python、不注册 PATH、不连接硬件；这不是离线包。Windows CANDO 需 x64 Python 及另外准备的厂商驱动与 SDK。升级时先退出旧程序，再从新目录安装，不覆盖已有 `.venv`。
 
 ## 启动与连接
 

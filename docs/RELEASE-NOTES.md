@@ -1,3 +1,9 @@
+# 版本说明
+
+当前下位机版本：[Piper Robot 0.7.1 — 单终端交互](ROBOT-RELEASE-0.7.1.md)。安装入口、变更与验证范围见该页。
+
+以下保留历史联合包说明，不适用于新版机器人安装包。
+
 # 0.2.1 完整联合包
 
 包含 piper-lab 0.2.1、piperx-middleware 0.5.0，99 个固定依赖 wheel 和两个项目 wheel，Windows x64 / Python 3.12。

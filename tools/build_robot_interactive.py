@@ -28,7 +28,11 @@ def main():
         '__pycache__','.pytest_cache','*.egg-info','build','dist','.venv*','*.token','*.sqlite3','*.log'))
     shutil.copytree(repo/'docs'/'implementation',root/'implementation')
     shutil.copy2(repo/'docs'/'ROBOT-INTERACTIVE.zh.md',root/'README.zh.md')
-    shutil.copy2(repo/'docs'/'ONE-TASK-DEMO.zh.md',root/'ONE-TASK-DEMO.zh.md')
+    shutil.copy2(repo/'docs'/'ROBOT-GUIDE.en.md',root/'README.en.md')
+    for doc in ('ONE-TASK-DEMO.zh.md', 'ROBOT-GUIDE.zh.md', 'ROBOT-GUIDE.en.md',
+                'ROBOT-INTERACTIVE.zh.md', 'ROBOT-CLI-REFERENCE.md',
+                f'ROBOT-RELEASE-{version}.md'):
+        shutil.copy2(repo/'docs'/doc,root/doc)
     shutil.copy2(repo/'gpt.md',root/'source'/'gpt.md')
     if (repo/'LICENSE').exists():shutil.copy2(repo/'LICENSE',root/'LICENSE')
     # An isolated venv; never edits an existing installation or robot profile.
@@ -59,7 +63,7 @@ macOS/Linux：python3 install.py，随后 ./piper-robot。
 安装和 --help 不打开 CAN。请先选择仿真验证。真机连接仍需厂商驱动、SDK 和真实反馈。
 升级：退出旧前端/执行器，解压到新目录，不覆盖正在运行的旧包或配置。
 用户配置不在发行包中；首次运行按独立模式/目标迁移，保留限制。
-完整操作说明 README.zh.md；单次任务演示 ONE-TASK-DEMO.zh.md；验证范围 implementation/validation.md。
+完整操作说明 README.zh.md / README.en.md；单次任务演示 ONE-TASK-DEMO.zh.md；验证范围 implementation/validation.md。
 ''',encoding='utf-8')
     manifest=[{'path':p.relative_to(root).as_posix(),'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
               for p in sorted(root.rglob('*')) if p.is_file()]
