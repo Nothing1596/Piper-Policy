@@ -1,5 +1,15 @@
 # Piper Policy
 
+当前下位机源码版本 **0.7.1**。推荐入口只有 `piper-robot`；`piperx` 和脚本入口继续兼容。下方下载链接是已发布的历史包，不代表当前源码版本。
+
+```sh
+piper-robot
+```
+
+选择仿真 → 本机，输入 `/connect`；随后 `/tools` 查看工具，`/manual 工具名(参数)` 调用，`/quit` 退出。新仿真默认自动执行合法动作，不需要先配置审批阈值；真机默认风险动作确认。模型配置是可选的，手动调用不需要 API key。
+
+可照着操作：[单次任务演示：手动命令与模型调用](docs/ONE-TASK-DEMO.zh.md)。
+
 单终端重构的启动、审批和远程连接说明见 [Robot 交互指南](docs/ROBOT-INTERACTIVE.zh.md)。软件与平台验证范围单独列在 [验证记录](docs/implementation/validation.md)。
 
 [中文](README.md) | [English](README.en.md)

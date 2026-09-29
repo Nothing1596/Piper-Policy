@@ -1,4 +1,6 @@
-# Piper Robot 单终端操作
+# Piper Robot 单终端操作（源码 0.7.1）
+
+想先完整跑一遍？见 [单次任务演示：用户命令与模型工具调用](ONE-TASK-DEMO.zh.md)。
 
 本次重构将仿真和真机配置分开。ROS `piper-lab/config/hardware.yaml` 的 commissioning 不属于这个终端，不会自动修改为 `true`。
 
@@ -34,9 +36,13 @@ piper-robot --mode simulation --simulation-backend sim
 - `/approval always`：每个动作确认。
 - `/approval auto`：不确认动作，但仍拒绝硬限位越界、反馈过期、故障和无有效控制会话。
 
-修改审批模式或关键配置时，先显示具体修改，再在当前终端确认。动作进入 `awaiting_approval` 后用 `/approve JOB_ID` 或 `/deny JOB_ID` 处理；等待期间 `/status`、`/jobs`、`/stop` 仍可使用。不存在需要另开终端的 OPEN 时间窗口。
+新建仿真配置默认 `auto`，可直接连接并调用工具；不需要填写四个自动审批阈值。阈值仅在 `risk` 模式使用。已有配置中的审批模式和限制会保留，不会因升级被放宽。
 
-`/limits` 显示有效执行限制，并提供设置向导。设备能力、用户执行限制和自动审批阈值是三件不同的事。执行范围取设备与用户限制交集；越界直接报错，不静默截断目标。设置自动审批阈值示例：
+修改审批模式或关键配置时，先显示具体修改，再输入 `/confirm` 确认或 `/cancel` 取消。只有同时存在多个待确认修改时才需要编号（`/confirm CODE`）；无其他待确认修改且本次未改值时，不产生确认请求。有旧提案时会保留明确选择，避免误确认旧修改。动作进入 `awaiting_approval` 后用 `/approve JOB_ID` 或 `/deny JOB_ID` 处理；等待期间 `/status`、`/jobs`、`/stop` 仍可使用。不存在需要另开终端的 OPEN 时间窗口。
+
+`/limits` 显示有效执行限制，并提供设置向导。设备能力、用户执行限制和自动审批阈值是三件不同的事。执行范围取设备与用户限制交集；越界直接报错，不静默截断目标。直接输入 `/limits`，按提示填写即可，回车保留原值；无待确认提案且全部保留时直接结束。auto/always 只问速度、夹爪最大和最小开度三项；risk 才继续询问四个自动审批阈值。未展示的既有阈值保持不变。无需理解内部会话、版本或凭据机制。
+
+下面的 JSON 是脚本用户的可选写法，设置自动审批阈值示例：
 
 ```text
 /limits {"automatic":{"max_joint_step_deg":5,"max_tcp_step_m":0.02,"max_speed_percent":5,"max_effort_protocol":0.5}}

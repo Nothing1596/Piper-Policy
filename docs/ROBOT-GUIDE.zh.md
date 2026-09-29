@@ -21,6 +21,24 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
 ## 2. 启动仿真并连接
 
+**当前源码 0.7.1 推荐单终端方式**（本页的 0.6.0 下载包使用下方兼容方式）：
+
+```text
+piper-robot
+# 选择仿真、本机，进入交互界面后输入：
+/connect
+/status
+/tools
+/manual robot_move_joints(joints_deg=[1,0,0,0,0,0], speed_percent=5)
+/quit
+```
+
+新仿真默认不需要审批设置；不需要填写端口或另开控制窗口。配置模型后也可输入自然语言，手动调用不依赖模型。详细操作见 [单终端指南](ROBOT-INTERACTIVE.zh.md)。
+
+### 兼容方式：旧包、外部脚本或独立 MCP 客户端
+
+以下两终端流程用于独立托管服务；交互用户无需执行。
+
 终端 A，保持运行：
 
 ```powershell

@@ -67,3 +67,15 @@ python tools/build_robot_interactive.py --wheel dist/interactive-wheels/piperx_m
 ## 推送前最终回归（2026-09-28）
 
 包含 Windows 进程探测修复的当前代码：macOS **508 passed、1 Windows 专用 skipped、1 弃用 warning，34.54 秒**。首次回归发现停止测试在读取 actuator hold target 前允许仿真推进一步，造成时序失败；将停止前后比较放到同一 RLock 内，保留原有误差断言，全量通过，且该测试独立重复 5 次均通过。只调整测试同步方式，没有改变停止实现或放宽容差。Windows 实测仍以上述独立记录为准。
+
+## 0.7.1 交互简化与分发包（2026-09-29）
+
+- Gemini 3.8 Flash、dsh 当前配置模型给出静态审查 APPROVE；Kimi 的字面量校验与演示签名聚焦复核 APPROVE。Claude 最小调用超时，不计入通过。范围与非阻塞建议处置见 [多 CLI 审查](peer-review-0.7.1.md)。
+- 当前代码全量：macOS **533 passed、6 skipped、1 warning，34.56 秒**。跳过项是 Windows 进程探测 1 项、缺少显式 `PIPERX_SDK_ROOT` 的 SDK 协议测试 5 项。
+- 0.7.1 wheel 在全新虚拟环境安装 `[simulation,hardware]`，48 个包的依赖检查通过。安装路径确认来自新 wheel，包元数据和 `__version__` 均为 0.7.1。
+- 离开源码目录，通过已安装的交互控制器、实际 MCP/HTTP 执行器完成演示的三步动作：J1 5°、夹爪 0.04 m、关节恢复 0°。每步 succeeded，退出后无 runtime 记录残留。随后三个独立临时配置的冷启动复核也全部通过。
+- **尚未定位的观察：** 首轮干净安装冒烟在连接后立即检查 `ready` 和 backend 的组合断言时失败，未保存当时状态详情，且没有发送动作。加上失败日志后的运行及后续三次冷启动未复现；没有据此改产品代码，也不声称找到了原因或修复了该瞬态。示例仍要求 Ready: yes 后才能继续。
+- 新包包含单次任务演示、中文操作说明、源码、测试、MuJoCo 资源、wheel、安装入口及 SHA-256 清单。源码/安装版本统一为 0.7.1，旧 0.7.0 包不覆盖。
+- 首次安装仍需 Python 3.11+ 和网络下载依赖；没有内置 Python、厂商 CAN 驱动或 SDK，不是离线便携包。本轮没有重做 Windows/Linux 或真实硬件验收，没有调用外部模型执行机器人任务。
+
+本次用户授权审查通过后推送当前分支并打包，不创建 GitHub Release 或标签。
