@@ -10,11 +10,14 @@ description = "PiperX lower controller CLI, HTTP/MCP executor and local model si
 dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "pydantic>=2.10,<3", "httpx>=0.28,<1", "mcp>=1.30,<2", "numpy>=1.26,<3", "scipy>=1.13,<2", "prompt-toolkit>=3.0.52,<4", "jsonschema>=4.20,<5"]
 
 [project.optional-dependencies]
+gpt-policy = ["ruckig>=0.15.3,<=0.19.4", "Pillow>=10,<13", "rich>=13,<15", "mcap-protobuf-support>=0.5.3,<1"]
 test = ["pytest>=8,<10", "pytest-asyncio>=1,<2"]
 hardware = ["python-can>=4.4,<5"]
 simulation = ["mujoco==3.14.0", "Pillow>=10,<13"]
 
 [project.scripts]
+piper-gpt = "gpt_policy_piper.cli:main"
+piper-gpt-prepare = "gpt_policy_piper.prepare:main"
 piperx = "piperx_middleware.cli:main"
 piper-robot = "piperx_middleware.standalone_cli:main"
 piperx-mcp = "piperx_middleware.mcp_server:main"

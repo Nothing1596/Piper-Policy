@@ -7,3 +7,12 @@ YOLO11n ONNX is derived from Ultralytics YOLO11 (https://github.com/ultralytics/
 No private videos, hardware tokens or VLM model weights are included. Any separately obtained VLM weights retain their own license.
 
 The detector is distributed in the complete release, not in the Git tree. See docs/DETECTOR-SOURCE.md for the pinned upstream source and export information. No repository-wide license has been selected for all original project code.
+
+## Separately supplied GPT-Policy baseline
+
+The optional `gpt_policy_piper` integration targets cheng-haha/GPT-Policy commit
+`ab970d88bc5570d80a7b4f3e8d3ad97ebe65a007`. GPT-Policy source is not included in
+this repository or its adapter wheel. Its current LICENSE is review/evaluation
+only, with no selected redistribution/commercial license. Obtain permission
+before redistributing its separately prepared checkout. See
+`docs/GPT-POLICY-WINDOWS-SIM.md` for the boundary and verification limits.

@@ -323,6 +323,17 @@ class MujocoBackend(Backend):
                 for a,q in zip(self.gripper_act_indices,self.gripper_qpos_indices):self.data.ctrl[a]=float(self.data.qpos[q])
             self.active_target=False
 
+    def begin_timed_trajectory(self, current_deg):
+        """Use externally timed servo samples without a second motion profile."""
+        with self.lock:
+            self._write_guard()
+            self.profile_speed_percent = None
+            self.reference_velocity = np.zeros(6)
+            self.arm_goal_rad = np.deg2rad(current_deg)
+            for actuator, q in zip(self.arm_act_indices, self.arm_goal_rad):
+                self.data.ctrl[actuator] = float(q)
+            self.active_target = True
+
     def begin_joint(self, current_deg: list[float], speed_percent: int) -> None:
         with self.lock:
             self._write_guard()

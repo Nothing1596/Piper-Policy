@@ -56,7 +56,7 @@ class GripperMove(StrictModel):
     width_m: Number = Field(ge=0, le=0.09)
     effort_protocol: Number = Field(default=0.5, ge=0, le=32.767)
     timeout_s: Number = Field(default=10, gt=0)
-    completion: Literal['width','bilateral_contact'] = 'width'
+    completion: Literal['width','bilateral_contact','width_or_bilateral_contact'] = 'width'
 
 
 class ControlMode(StrictModel):
@@ -124,7 +124,7 @@ class SetGripper(StrictModel):
     width_m: Number = Field(ge=0, le=0.09)
     effort_protocol: Number = Field(default=0.5, ge=0, le=32.767)
     timeout_s: Number = Field(default=10, gt=0)
-    completion: Literal['width','bilateral_contact'] = 'width'
+    completion: Literal['width','bilateral_contact','width_or_bilateral_contact'] = 'width'
 
 
 Primitive = Annotated[MoveTo | MoveBy | Rotate | SetGripper | MoveLinear, Field(discriminator="kind")]

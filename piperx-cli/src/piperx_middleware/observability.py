@@ -45,7 +45,7 @@ def match_whitelisted_operation(method: str, path: str):
       - /health, /openapi.json, /mcp, and any unknown path.
     """
     clean_path = path
-    extra = {("GET", "/v1/diagnostics"), ("POST", "/v1/primitives/preview"),
+    extra = {("POST", "/v1/simulation/trajectory"), ("POST", "/v1/simulation/trajectory/preview"),("GET", "/v1/diagnostics"), ("POST", "/v1/primitives/preview"),
              ("POST", "/operator/query-limits"),
              ("POST", "/operator/estop"), ("POST", "/operator/clear-estop"),
              ("PATCH", "/operator/parameters"), ("POST", "/operator/sim-fault")}

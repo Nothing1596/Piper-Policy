@@ -169,9 +169,17 @@ def create_app(service: RobotService, model_token: str, operator_token: str, on_
             request.state.error_code = "origin_rejected"
             return JSONResponse({"error": {"code": "origin_rejected", "message": "Browser-origin requests are not supported."}}, 403)
         length = request.headers.get("content-length", "0")
-        if not length.isdigit() or int(length) > 16384:
+        maximum_body = 1048576 if request.url.path in ('/v1/simulation/trajectory', '/v1/simulation/trajectory/preview') else 16384
+        if not length.isdigit() or int(length) > maximum_body:
             request.state.error_code = "body_too_large"
-            return JSONResponse({"error": {"code": "body_too_large", "message": "Request body exceeds 16 KiB."}}, 413)
+            return JSONResponse({"error": {"code": "body_too_large", "message": "Request body exceeds the endpoint limit."}}, 413)
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > maximum_body:
+                request.state.error_code = "body_too_large"
+                return JSONResponse({"error": {"code": "body_too_large", "message": "Request body exceeds the endpoint limit."}}, 413)
+            body.extend(chunk)
+        request._body = bytes(body)  # Starlette CachedRequest forwards this once
         return await call_next(request)
 
     @app.exception_handler(DomainError)

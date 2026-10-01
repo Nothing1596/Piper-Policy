@@ -21,7 +21,10 @@ def _command_defaults(command):
     return command
 
 
-class RobotService(InteractionControls, RuntimeControls):
+from .timed_trajectory import TimedTrajectoryControls
+
+
+class RobotService(TimedTrajectoryControls, InteractionControls, RuntimeControls):
     """One serialized action owner, shared by HTTP and every MCP client."""
     def __init__(self, backend: Backend, settings: Settings):
         self.backend, self.settings = backend, settings
@@ -78,6 +81,11 @@ class RobotService(InteractionControls, RuntimeControls):
                        "gripper_effort_protocol": [0, self.settings.gripper_effort_limit if self.settings.control_profile == "calibration" else 32.767],
                        "feedback_timeout_s": self.settings.feedback_timeout_s,
                        "joint_limits_deg": JOINT_LIMITS_DEG},
+            "timed_joint_trajectory": {"available": self.backend.name == "mujoco",
+                "simulation_only": True, "path_samples_preserved": True,
+                "hard_velocity_rad_s": 3.141592653589793, "hard_acceleration_rad_s2": 20.,
+                "hard_jerk_rad_s3": 500., "max_samples": 4096, "max_duration_s": 600,
+                "collision_checking": False},
             "collision_checking": False,
             "collision_feedback": True,
             "operator_operations": ["estop", "clear-estop", "runtime-parameters", "control-window"],
@@ -188,7 +196,7 @@ class RobotService(InteractionControls, RuntimeControls):
                 tcp = PiperKinematics(self.settings.tcp_offset_m, self.settings.tcp_offset_rpy_deg).pose(s.q_deg)
                 tcp.update(source="forward_kinematics", feedback_stamp_s=s.feedback_stamp_s,
                            feedback_age_s=s.feedback_age_s, feedback_live=live)
-            return {"instance_id": self.instance_id, "robot": s.public(), "tcp": tcp, "ready": ready, "not_ready_reason": reason,
+            return {"instance_id": self.instance_id, "parameter_version": self.parameter_version, "robot": s.public(), "tcp": tcp, "ready": ready, "not_ready_reason": reason,
                     "interaction": {"policy_mode": self.policy.mode, "session": self.sessions.public(),
                                     "control_session_required": self.interaction_required, "scene_collision_checked": False},
                     "observation_identity": {"instance_id": self.instance_id, "connection_epoch": self.epoch,
@@ -258,7 +266,7 @@ class RobotService(InteractionControls, RuntimeControls):
                 generation = self.stop_generation
             state = self.backend.snapshot()
             self._check(state, gripper=isinstance(command, GripperMove), require_position_mode=not isinstance(command, ControlMode))
-            if isinstance(command,GripperMove) and command.completion=='bilateral_contact':
+            if isinstance(command,GripperMove) and command.completion in ('bilateral_contact','width_or_bilateral_contact'):
                 if self.backend.name!='mujoco' or self.settings.control_profile=='calibration':
                     raise DomainError('contact_completion_unavailable','Bilateral contact completion requires the MuJoCo force sensor adapter.',422)
                 if command.width_m>=state.gripper_width_m:
@@ -330,6 +338,12 @@ class RobotService(InteractionControls, RuntimeControls):
                    "command_attempted": False, "stop_result": None}
             if "primitive" in plan:
                 job.update(primitive=copy.deepcopy(plan["primitive"]), resolution=copy.deepcopy(plan["resolution"]))
+            if "timed_trajectory" in plan:
+                self._timed_simulation_guard()
+                if plan['parameter_version'] != self.parameter_version:
+                    raise DomainError('state_changed', 'TCP parameters changed since timeline preview')
+                self.preview_timed_trajectory_validation(plan['timed_trajectory'], state)
+                job['timed_trajectory'] = copy.deepcopy(plan['timed_trajectory'])
             if self._queue_approval(job, command, plan, state):
                 return copy.deepcopy(job)
             return self._start_job(job, command, plan)
@@ -356,7 +370,7 @@ class RobotService(InteractionControls, RuntimeControls):
         with self.lock:
             previous = self.store.get(request_id=request_id)
             if previous:
-                if "primitive" in previous or _command_defaults(previous["command"]) != command.model_dump():
+                if "primitive" in previous or "timed_trajectory" in previous or _command_defaults(previous["command"]) != command.model_dump():
                     raise DomainError("idempotency_conflict", "This request_id already refers to another command.")
                 return previous
             plan = self.preview(command)
@@ -426,6 +440,8 @@ class RobotService(InteractionControls, RuntimeControls):
         return state
 
     def _run(self, job, command, plan):
+        if 'timed_trajectory' in plan:
+            return self._run_timed_trajectory(job, command, plan)
         deadline = time.monotonic() + command.timeout_s
         last_write_at, last_settled_stamp = time.monotonic(), None
         last_settled_q = None
@@ -467,6 +483,7 @@ class RobotService(InteractionControls, RuntimeControls):
             current = state.q_deg.copy()
             width = state.gripper_width_m
             settled = 0
+            settled_contact = 0
             while True:
                 if self.cancel.wait(0.05):
                     raise DomainError("cancelled", "Stop requested.")
@@ -504,11 +521,12 @@ class RobotService(InteractionControls, RuntimeControls):
                     elif not calibration:
                         reached = (max(abs(a - b) for a, b in zip(state.q_deg, command.joints_deg)) < .12
                                    if isinstance(command, JointMove) else abs(state.gripper_width_m - command.width_m) < .001)
-                        if isinstance(command,GripperMove) and command.completion=='bilateral_contact':
+                        if isinstance(command,GripperMove) and command.completion in ('bilateral_contact','width_or_bilateral_contact'):
                             contact=state.diagnostics.get('gripper_contact',{})
                             stamp_contact=contact.get('source_timestamp_s')
-                            reached=(contact.get('supported') is True and stamp_contact is not None and
+                            contact_reached=(contact.get('supported') is True and stamp_contact is not None and
                                      0<=time.monotonic()-stamp_contact<=self.settings.feedback_timeout_s)
+                            reached = contact_reached or (command.completion == 'width_or_bilateral_contact' and reached)
                     elif isinstance(command, JointMove):
                         if max(abs(a - b) for a, b in zip(state.q_deg, current)) > 0.3:
                             raise DomainError("tracking_error", "Measured joints failed to track the bounded reference.")
@@ -544,16 +562,19 @@ class RobotService(InteractionControls, RuntimeControls):
                     verified = reached and stamp is not None and stamp > last_write_at and stable
                     if verified and stamp != last_settled_stamp:
                         settled += 1
+                        settled_contact = settled_contact + 1 if (isinstance(command, GripperMove)
+                            and command.completion in ('bilateral_contact','width_or_bilateral_contact') and contact_reached) else 0
                         last_settled_stamp = stamp
                     elif not verified:
                         settled = 0
+                        settled_contact = 0
                     if stamp is not None and stamp > last_write_at and stamp != last_observed_stamp:
                         last_settled_q = state.q_deg.copy()
                         last_settled_width = state.gripper_width_m
                         last_observed_stamp = stamp
                     if settled >= 3:
                         job.update(status="succeeded", after=state.public(), verification="Fresh feedback confirmed CAN/MOVE_J at the measured pose; no reset or enable command sent." if isinstance(command, ControlMode) else "Fresh robot feedback reached target; no visual/contact success claim.")
-                        if isinstance(command,GripperMove) and command.completion=='bilateral_contact':
+                        if isinstance(command,GripperMove) and command.completion in ('bilateral_contact','width_or_bilateral_contact') and settled_contact >= 3:
                             job['verification']='Three fresh stable samples confirmed bilateral forces on one dynamic object; lift/task success is not implied.'
                             job['contact_evidence']=state.diagnostics['gripper_contact']
                         break
