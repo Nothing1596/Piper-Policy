@@ -448,3 +448,18 @@ async def test_wizard_skips_inactive_thresholds_and_preserves_them(setup_env, mo
     await controller.handle_line('/confirm')
     assert operator.policy['limits']['max_speed_percent'] == 50
     assert operator.policy['automatic'] == before
+
+
+@pytest.mark.asyncio
+async def test_force_config_is_confirmed_operator_policy(setup_env):
+    controller,bridge,managed,operator,emitted=setup_env
+    await controller.handle_line('/config force')
+    assert any('off' in x and '5 degrees' in x for x in emitted)
+    await controller.handle_line('/config force on')
+    assert not operator.policy.get('force',False)
+    await controller.handle_line('/confirm')
+    assert operator.policy['force'] is True
+    assert not bridge.calls and managed.config=={'port':8765}
+    await controller.handle_line('/config force off')
+    await controller.handle_line('/confirm')
+    assert operator.policy['force'] is False

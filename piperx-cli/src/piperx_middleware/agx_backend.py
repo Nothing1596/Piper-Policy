@@ -268,8 +268,30 @@ class AgxBackend(SDKControls):
 
     @staticmethod
     def _validate_joints(q):
-        if len(q) != 6 or any(not math.isfinite(v) or not lo <= v <= hi for v, (lo, hi) in zip(q, JOINT_LIMITS_DEG)):
+        from .recovery_limits import worker_bounds
+        bounds = worker_bounds() or JOINT_LIMITS_DEG
+        if len(q) != 6 or any(not math.isfinite(v) or not lo <= v <= hi for v, (lo, hi) in zip(q, bounds)):
             raise DomainError("joint_limits", "Invalid or out-of-range joint target.")
+
+    def _move_j(self, joints_deg):
+        from .recovery_limits import worker_bounds
+        bounds = worker_bounds()
+        if bounds is None:
+            return self.arm.move_j([math.radians(v) for v in joints_deg])
+        self._validate_joints(joints_deg)
+        original = self.arm._config
+        limits = original.get("joint_limits", {})
+        if len(limits) != 6 or not self.arm.get_joint_limits_enabled():
+            raise DomainError("recovery_sdk_limits", "Recovery requires the SDK's six-joint limit checker.")
+        # The SDK normally silently clamps. Keep its checker enabled and replace
+        # only this call's host bounds; never send controller limit-setting frames.
+        self.arm._config = dict(original, joint_limits={
+            name: [math.radians(lo), math.radians(hi)]
+            for name, (lo, hi) in zip(limits, bounds)})
+        try:
+            return self.arm.move_j([math.radians(v) for v in joints_deg])
+        finally:
+            self.arm._config = original
 
     def begin_joint(self, current_deg, speed_percent):
         self._validate_joints(current_deg)
@@ -280,7 +302,7 @@ class AgxBackend(SDKControls):
         expected = joint_frames(current_deg) + [(0x151, bytes([1, 255, speed_percent, 0, 0, 0, 0, 0])),
                                                 (0x151, bytes([1, 1, speed_percent, 0, 0, 0, 0, 0]))]
         with self._transaction(expected):
-            self.arm.move_j([math.radians(v) for v in current_deg])
+            self._move_j(current_deg)
             self.arm.set_speed_percent(speed_percent)
             self.arm.set_motion_mode("j")
 
@@ -297,7 +319,7 @@ class AgxBackend(SDKControls):
         expected = joint_frames(current_deg) + [(0x151, bytes([1, 1, speed_percent, 0, 0, 0, 0, 0]))]
         with self._transaction(expected):
             checkpoint()
-            self.arm.move_j([math.radians(v) for v in current_deg])
+            self._move_j(current_deg)
             checkpoint()
             self.arm._msg_mode = mode
             self.arm.set_motion_mode("j")
@@ -305,7 +327,7 @@ class AgxBackend(SDKControls):
     def joint_target(self, joints_deg):
         self._validate_joints(joints_deg)
         with self._transaction(joint_frames(joints_deg)):
-            self.arm.move_j([math.radians(v) for v in joints_deg])
+            self._move_j(joints_deg)
 
     def linear_target(self, current_deg, flange_pose, speed_percent, checkpoint):
         self._validate_joints(current_deg)
@@ -320,7 +342,7 @@ class AgxBackend(SDKControls):
         mode.ctrl_mode, mode.move_spd_rate_ctrl = 1, speed_percent
         with self._transaction(joint_frames(current_deg) + [(0x151, bytes([1, 2, speed_percent, 0, 0, 0, 0, 0]))] + frames):
             checkpoint()
-            self.arm.move_j([math.radians(v) for v in current_deg])
+            self._move_j(current_deg)
             checkpoint()
             self.arm._msg_mode = mode
             self.arm.set_motion_mode("l")

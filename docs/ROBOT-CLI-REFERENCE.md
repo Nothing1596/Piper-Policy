@@ -19,6 +19,12 @@ piper-robot
 
 没有 TTY 的控制台启动须显式指定 `--mode simulation` 或 `--mode real`。`--simulation-backend sim` 选择确定性测试替身，默认 `mujoco` 是物理仿真。`--root DIR` 选择前端数据根目录，模式与目标配置分开保存。`/quit` 等待已接受动作结束并清理专用执行器，附着共享服务时只释放本会话；退出不是急停。
 
+## 源码新增：force recovery（未发布）
+
+`/config force` 查看；`/config force on|off` 提议修改，再 `/confirm` 应用。仅允许已有 ≤5° 越界的保持/向内恢复，每次动作请求必须 `/approve <job_id>`，即使审批为 `auto`。不覆盖控制器回报限位、不改固件、不自动裁剪目标。仅显式关节动作及控制模式支持越界恢复；HTTP/MCP 共用相同准入和确认规则。详见 [恢复操作](ROBOT-INTERACTIVE.zh.md#force-越界恢复源码新增尚未包含在-071-发行包)。
+
+Operator-only force recovery is off by default. Enable/disable with `/config force on|off`, then `/confirm`. Every action request requires separate operator approval, including auto mode. The 5-degree allowance covers an existing model/site overrun only: hold or move inward, never create or worsen an overrun. Queried controller limits remain enforced. This is an unreleased source feature, not a physical acceptance claim.
+
 ## 兼容脚本与独立 MCP / Script and MCP compatibility
 
 以下参数表用于已有脚本和独立托管服务，不是普通交互用户的连接步骤。包装命令参数在命令后，执行器全局参数在命令前：

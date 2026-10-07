@@ -34,6 +34,7 @@ class AutoApproval(InteractionModel):
 
 class InteractionPolicy(InteractionModel):
     mode: Literal['always','risk','auto'] = 'risk'
+    force: bool = Field(default=False, strict=True)
     limits: ExecutionLimits = Field(default_factory=ExecutionLimits)
     automatic: AutoApproval = Field(default_factory=AutoApproval)
     version: int = Field(default=1, ge=1, strict=True)

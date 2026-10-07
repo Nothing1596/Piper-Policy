@@ -22,6 +22,7 @@ def backend(tmp_path):
     arm = AgxArmFactory.create_arm(create_agx_arm_config(robot=ArmModel.PIPER_X,
         firmeware_version="v189", interface="virtual", channel="offline-test", auto_connect=False))
     arm.set_auto_set_motion_mode_enabled(False)
+    arm.set_joint_limits_enabled(True)
     b = AgxBackend(Settings(backend="agx", data_dir=tmp_path))
     b.arm = arm
     arm.is_connected = lambda: True
@@ -89,3 +90,32 @@ def test_unsolicited_frame_blocked(backend):
     with pytest.raises(RuntimeError): backend.arm.reset()
     assert not backend.test_frames
     assert backend.fault == "Unexpected CAN transmission blocked"
+
+
+def test_recovery_exact_pose_no_clamp_and_sdk_restored(backend):
+    from piperx_middleware.recovery_limits import recovery_bounds, recovery_scope, worker_bounds
+    from piperx_middleware.models import JOINT_LIMITS_DEG
+    from piperx_middleware.agx_backend import joint_frames
+    q=[0.,-1.168,1.056,-39.249,-89.516,58.842]
+    bounds=recovery_bounds(q, [lo for lo,hi in JOINT_LIMITS_DEG], [hi for lo,hi in JOINT_LIMITS_DEG])
+    original=backend.arm._config
+    with recovery_scope(bounds):
+        backend.set_control_mode(q,5,lambda:None)
+        assert backend.arm._config is original
+        assert backend.arm.get_joint_limits_enabled()
+        assert backend.test_frames==joint_frames(q)+[(0x151,bytes([1,1,5,0,0,0,0,0]))]
+        with pytest.raises(DomainError):backend.joint_target([0.,-1.169,1.056,-39.249,-89.516,58.842])
+    assert worker_bounds() is None
+    with pytest.raises(DomainError):backend.joint_target(q)
+    assert len(backend.test_frames)==4
+
+
+def test_recovery_sdk_config_restored_on_error(backend,monkeypatch):
+    from piperx_middleware.recovery_limits import recovery_scope, worker_bounds
+    from piperx_middleware.models import JOINT_LIMITS_DEG
+    original=backend.arm._config
+    def fail(q):raise RuntimeError('transport failed')
+    monkeypatch.setattr(backend.arm,'move_j',fail)
+    with pytest.raises(RuntimeError):
+        with recovery_scope(JOINT_LIMITS_DEG):backend.joint_target([0.]*6)
+    assert backend.arm._config is original and worker_bounds() is None
