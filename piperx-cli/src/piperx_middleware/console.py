@@ -257,7 +257,7 @@ class ConsoleController:
         except ValueError as exc:
             return {"error": {"code": "invalid_arguments", "message": str(exc)}}
 
-        tool = next((t for t in getattr(self.bridge, "tools", []) if t.get("name") == name), None)
+        tool = next((t for t in self.available_tools() if t.get("name") == name), None)
         if not tool:
             return {"error": {"code": "unknown_tool", "message": f"Tool '{name}' not found in exposed tools"}}
 
@@ -394,6 +394,8 @@ class ConsoleController:
                 last_status = status
 
             if status == "awaiting_approval":
+                if getattr(self, 'agent_mode', False):
+                    return status_res
                 was_awaiting = True
                 deadline = time.monotonic() + timeout_s + grace_s
             elif was_awaiting and status in ("accepted", "running"):
@@ -516,6 +518,9 @@ class ConsoleController:
         self.emit("")
         self.emit("Plain text prompts are sent to the configured model agent.")
         self.emit("Ctrl-C cancels the active local task; use /stop for robot motion cancellation.")
+
+    def available_tools(self):
+        return getattr(self.bridge, 'tools', [])
 
     async def _cmd_status(self) -> None:
         try:
@@ -804,7 +809,7 @@ class ConsoleController:
     async def _cmd_tools(self, rest: str) -> None:
         tool_name = rest.strip()
         if not tool_name:
-            tools = getattr(self.bridge, "tools", [])
+            tools = self.available_tools()
             if not tools:
                 self.emit("No tools exposed by MCP bridge.")
                 return
@@ -815,7 +820,7 @@ class ConsoleController:
                 self.emit(f"  - {name}: {desc}")
             return
 
-        tool = next((t for t in getattr(self.bridge, "tools", []) if t.get("name") == tool_name), None)
+        tool = next((t for t in self.available_tools() if t.get("name") == tool_name), None)
         if not tool:
             self.emit(f"Tool '{tool_name}' not found.")
             return
@@ -932,12 +937,16 @@ class ConsoleController:
 
     async def _run_model_turn(self) -> None:
         try:
+            prepare = getattr(self, 'prepare_model_context', None)
+            if prepare:
+                await prepare(self.messages)
             reply = await run_turn(
                 config=self.model_config,
                 messages=self.messages,
-                tools=getattr(self.bridge, "tools", []),
+                tools=self.available_tools(),
                 invoke=self.invoke_tool,
                 emit=self.emit,
+                image_inputs=getattr(self, 'image_inputs', None),
             )
             if reply:
                 self.emit(f"\nAssistant: {reply}\n")

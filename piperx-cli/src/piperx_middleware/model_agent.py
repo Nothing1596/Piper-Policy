@@ -367,6 +367,7 @@ async def run_turn(
     tools: list[dict[str, Any]],
     invoke: Callable[[str, dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]],
     emit: Callable[[str], None] = print,
+    image_inputs: Callable[[dict], list] | None = None,
 ) -> str:
     """Runs a single user turn with OpenAI-compatible function calling loop (bounded to 12 rounds)."""
     endpoint = validate_endpoint(config.endpoint)
@@ -466,6 +467,7 @@ async def run_turn(
                     cid = tc["id"]
                     id_counts[cid] = id_counts.get(cid, 0) + 1
 
+            visual_inputs, reference_inputs = [], []
             for i, tc in enumerate(tool_calls):
                 tool_error: dict[str, Any] | None = None
                 call_id = ""
@@ -573,6 +575,12 @@ async def run_turn(
                     "content": json.dumps(tool_result, ensure_ascii=False),
                 }
                 messages.append(tool_msg)
+                if image_inputs and isinstance(tool_result, dict):
+                    parts = image_inputs(tool_result)
+                    if tool_result.get('schema') == 'piper.demo-reference.v1':
+                        reference_inputs.extend(parts)
+                    else:
+                        visual_inputs.extend(parts)
 
                 is_uncertain, uncertain_msg = is_uncertain_result(tool_result)
                 if is_uncertain:
@@ -594,6 +602,28 @@ async def run_turn(
                             }, ensure_ascii=False),
                         })
                     return f"Action outcome unknown: {uncertain_msg}"
+
+            if reference_inputs:
+                # Historical demonstration pages are not live camera evidence.
+                marker = 'Historical demonstration evidence; not the current robot scene:'
+                old = [m for m in messages if m.get('role') == 'user' and isinstance(m.get('content'),list)
+                       and m['content'] and m['content'][0].get('text') == marker]
+                for message in old[:-1]:
+                    message['content'] = 'Older demonstration images omitted; source frame IDs remain in tool history.'
+                messages.append({'role':'user','content':[{'type':'text','text':marker},*reference_inputs]})
+            if visual_inputs:
+                image_positions = [i for i, part in enumerate(visual_inputs) if part.get('type') == 'image_url']
+                if len(image_positions) > 6:
+                    # Camera adapters pair a short text label with each image.
+                    visual_inputs = visual_inputs[max(0, image_positions[-6]-1):]
+                # Keep only two recent live image groups; tool JSON and file
+                # references remain in history for auditing old decisions.
+                old = [m for m in messages if m.get('role') == 'user' and isinstance(m.get('content'), list)
+                       and m['content'] and m['content'][0].get('text') == 'Live camera evidence (not task success verification):']
+                for message in old[:-1]:
+                    message['content'] = 'Older live images omitted; corresponding tool evidence remains in history.'
+                messages.append({'role': 'user', 'content': [
+                    {'type': 'text', 'text': 'Live camera evidence (not task success verification):'}, *visual_inputs]})
 
         return "Model reached maximum allowed rounds (12)."
     except asyncio.CancelledError:

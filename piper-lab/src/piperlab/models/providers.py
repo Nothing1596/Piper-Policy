@@ -82,6 +82,8 @@ class ModelProfile:
     model: str | None = None
     base_url: str | None = None
     api_key_env: str | None = None
+    api_key_file: str | None = None
+    reasoning_effort: str | None = None
     timeout_s: float = 180
     max_images: int = 6
     max_output_tokens: int = 4096
@@ -90,6 +92,10 @@ class ModelProfile:
     artifact_manifest: str | None = None
 
     def __post_init__(self):
+        if self.reasoning_effort not in (None,'none','low','high','max'):
+            raise ValueError('Unknown reasoning_effort')
+        if self.reasoning_effort is not None and self.provider!='openai-compatible':
+            raise ValueError('reasoning_effort is supported only by compatible profiles')
         if self.provider not in DEFAULTS:
             raise ValueError('Unknown model provider')
         url, env = DEFAULTS[self.provider]
@@ -157,6 +163,7 @@ class ApiVisionModel:
                          'identity_verified': False, 'cache_identity_complete': False,
                          'request_settings': {'max_images': profile.max_images,
                                               'max_output_tokens': profile.max_output_tokens,
+                                              'reasoning_effort': profile.reasoning_effort,
                                               'structured_output': profile.structured_output}}
         self.last_call = None
         self._active_client = None
@@ -170,6 +177,8 @@ class ApiVisionModel:
 
     def _key(self):
         key = os.environ.get(self.profile.api_key_env or '', '')
+        if not key and self.profile.api_key_file:
+            key = Path(self.profile.api_key_file).read_text(encoding='utf-8').strip()
         if not key and urlparse(self.profile.base_url).hostname not in ('127.0.0.1', 'localhost', '::1'):
             raise ModelError('missing_api_key_env:' + str(self.profile.api_key_env))
         return key
@@ -208,9 +217,11 @@ class ApiVisionModel:
                        {'type': 'image_url', 'image_url': {'url': f'data:{v[0]};base64,{v[1]}'}} for t, v in parts]
             fmt = {'type': 'json_object'} if p.structured_output == 'json_object' else {
                 'type': 'json_schema', 'json_schema': {'name': 'robot_evidence', 'strict': True, 'schema': schema}}
-            return '/chat/completions', {'model': self.model, 'messages': [
+            payload = {'model': self.model, 'messages': [
                 {'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': content}],
                 'max_tokens': p.max_output_tokens, 'stream': False, 'response_format': fmt}
+            if p.reasoning_effort is not None:payload['reasoning_effort']=p.reasoning_effort
+            return '/chat/completions', payload
         if p.provider == 'anthropic':
             content = [{'type': 'text', 'text': v} if t == 'text' else
                        {'type': 'image', 'source': {'type': 'base64', 'media_type': v[0], 'data': v[1]}} for t, v in parts]
@@ -241,12 +252,12 @@ class ApiVisionModel:
             return ''.join(c.get('text', '') for c in parts if c.get('type') == 'output_text')
         if p == 'openai-compatible':
             choices = raw.get('choices', [])
+            record['finish_reason'] = choices[0].get('finish_reason') if choices else None
             if len(choices) != 1 or choices[0].get('finish_reason') != 'stop':
                 raise ModelError('incomplete_response')
             message = choices[0]['message']
             if message.get('refusal') or message.get('tool_calls'):
                 raise ModelError('refusal_or_tool_call')
-            record['finish_reason'] = 'stop'
             return message.get('content', '')
         if p == 'anthropic':
             if raw.get('stop_reason') != 'end_turn':

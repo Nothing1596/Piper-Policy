@@ -530,6 +530,12 @@ def compile_demo(
         raise CompileError("images_per_call must be a positive int")
     if images_per_call > 6:
         raise CompileError("images_per_call is bounded at 6 per the human-video v1 plan")
+    model_limit = getattr(model, 'max_images', images_per_call)
+    if type(model_limit) is not int or model_limit < 1:
+        raise CompileError('model.max_images must be a positive integer')
+    # Split selection batches to the provider's budget; never discard frames
+    # merely because the configured evaluator accepts fewer images per call.
+    images_per_call = min(images_per_call, model_limit)
     if isinstance(window_s, bool) or not isinstance(window_s, (int, float)) \
             or not math.isfinite(window_s) or window_s <= 0:
         raise CompileError("window_s must be a positive finite number")

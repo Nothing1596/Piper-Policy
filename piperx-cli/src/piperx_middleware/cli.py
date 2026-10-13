@@ -167,6 +167,8 @@ def main():
                         "(env PIPERX_TOKEN_FILE; default: <root>/model.token)")
     parser.add_argument("--mode", choices=["simulation", "real"], help="Explicit startup mode; required without a TTY")
     parser.add_argument("--target", default="local", help="Local executor or saved SSH target")
+    parser.add_argument("--agent", action="store_true", help="Model JSON-lines input/output; explicit --mode required")
+    parser.add_argument("--agent-mcp", action="store_true", help="Model stdio MCP including demo/live image tools; explicit --mode required")
     parser.add_argument("--simulation-backend", choices=["sim", "mujoco"], default="mujoco")
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("shell", help="Interactive robot console (also the default with no command)")

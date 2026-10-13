@@ -50,3 +50,25 @@ def test_uncertainty_halts_remaining_calls(monkeypatch):
     assert "unknown" in asyncio.run(coro)
     assert len(calls) == 1
     assert "not_executed" in messages[-1]["content"]
+
+
+def test_live_images_follow_all_tool_replies_and_history_is_bounded(monkeypatch):
+    actual=httpx.AsyncClient
+    replies=iter([response(twice=True),done()])
+    payloads=[]
+    def transport(req):
+        payloads.append(json.loads(req.content))
+        return httpx.Response(200,json=next(replies))
+    monkeypatch.setattr(httpx,'AsyncClient',lambda **kw:actual(transport=httpx.MockTransport(transport),**kw))
+    image=[part for i in range(6) for part in ({'type':'text','text':f'camera view {i}'},
+        {'type':'image_url','image_url':{'url':f'data:image/jpeg;base64,fixture{i}'}})]
+    marker='Live camera evidence (not task success verification):'
+    messages=[{'role':'user','content':[{'type':'text','text':marker},*image]} for _ in range(3)]
+    async def invoke(*args):return {'status':'succeeded'}
+    asyncio.run(run_turn(ModelConfig(endpoint='http://127.0.0.1:1234/v1',model='fixture'),messages,TOOLS,invoke,
+                         emit=lambda _:None,image_inputs=lambda _:image))
+    contents=payloads[1]['messages']
+    call=next(i for i,m in enumerate(contents) if m.get('tool_calls'))
+    assert [m['role'] for m in contents[call+1:call+4]]==['tool','tool','user']
+    assert sum(isinstance(m.get('content'),list) for m in messages)==2
+    assert sum(p.get('type')=='image_url' for p in messages[-2]['content'])==6

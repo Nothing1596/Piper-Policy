@@ -111,3 +111,13 @@ force 开启时，恢复使用显式关节目标与控制模式工具；笛卡�
 在 `real/local` 中使用 `/observe [相机序列号]`，保存当前 RGB、对齐深度和内参，返回图像路径；多相机且未选择时明确列出设备，不任意选取。`/pixel U V` 查询最近一次图像指定像素的深度与光学相机坐标，不生成基座坐标或动作。空深度直接报错，不用背景深度替代。图片是带时间戳的快照，执行前需重新观察。
 
 相机依赖 `pyrealsense2`、`numpy`、`opencv-python`。可在当前 profile 的 `camera.json` 设置 `python`（已具备这些依赖的解释器）、`serial`、`output_root`；默认使用当前解释器与 profile/observations。此配置仅影响本机相机采集。远程目标暂不支持这两个命令，避免把操作者电脑的相机误当机器人侧相机。原独立 `piper-robot observe` 子命令仍用于仿真。
+
+0.7.2.dev1 使用持续相机进程：`/video start|status|stop` 管理采集，`/observe` 复用视频并选出少量帧。`--agent` 提供模型 JSONL 入口，示例与边界见 [实时视频指南](ROBOT-LIVE-VIDEO.zh.md)。
+
+## 观察计划与几何计算（0.7.2.dev3）
+
+新增 `/plan [new GOAL | resume TASK_ID]`、`/config cameras`，模型工具 `task_plan`、`scene_query`。`camera_observe` 可传 `question_id`。示范工具支持 `overview` 和 `stage_id`。完整单次任务和标定配置见 [观察计划指南](ROBOT-OBSERVATION-PLAN.zh.md)。观察不隐式移动机械臂。
+
+MuJoCo 仿真（0.7.2.dev4）支持 `/observe` 和模型 `camera_observe`：每次一张新 RGB-D，
+可绑定 plan 问题自动计算、写回。`/video` 仍仅支持 real/local 连续相机。
+JSONL 在有图片时附加可选 `content`，MCP 返回 ImageContent；两者保留原工具结果。

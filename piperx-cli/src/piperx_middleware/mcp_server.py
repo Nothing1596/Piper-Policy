@@ -268,9 +268,9 @@ def create_mcp(client: RobotClient | ServiceClient, *, allowed_http_hosts: list[
             raise ValueError('workspace must be an existing directory')
 
         @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-        async def simulation_observe(output: str) -> list:
-            """Capture current MuJoCo RGB-D and camera metadata into a new workspace folder; returns pixels, never hidden object state or scoring."""
-            result = await anyio.to_thread.run_sync(lambda: capture(client, root, output))
+        async def simulation_observe(output: str, serial: str | None = None) -> list:
+            """Capture current MuJoCo RGB-D and camera metadata (mujoco-overview or mujoco-wrist) into a new workspace folder; returns pixels, never hidden object state or scoring."""
+            result = await anyio.to_thread.run_sync(lambda: capture(client, root, output, serial=serial))
             return [TextContent(type='text', text=json.dumps(result)),
                     Image(path=str(Path(result['evidence'])/'rgb.jpg')).to_image_content()]
 

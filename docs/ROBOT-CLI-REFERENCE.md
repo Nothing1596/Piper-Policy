@@ -2,6 +2,8 @@
 
 适用 **0.7.1**。[中文安装](ROBOT-GUIDE.zh.md) · [English installation](ROBOT-GUIDE.en.md) · [单次任务演示](ONE-TASK-DEMO.zh.md)
 
+源码开发版 **0.7.2.dev1** 新增 `/video start|status|stop`、实时 `/observe` 和 `--agent` JSONL 模型入口，见 [实时视频指南](ROBOT-LIVE-VIDEO.zh.md)。下方历史发行版 help 保留其版本范围。
+
 ## 推荐：单终端 / Recommended console
 
 安装后运行 `piper-robot`，选择仿真/真机和本机/远端。包内入口为 Windows 的 `.\piper-robot.cmd` 或 macOS/Linux 的 `./piper-robot`；安装不自动注册 PATH。Start the console, choose mode and target, and operate in one terminal.
@@ -1016,3 +1018,11 @@ options:
 ```
 
 </details>
+
+## 观察计划与几何计算（0.7.2.dev3）
+
+新增 `/plan [new GOAL | resume TASK_ID]`、`/config cameras`，模型工具 `task_plan`、`scene_query`。`camera_observe` 可传 `question_id`。示范工具支持 `overview` 和 `stage_id`。完整单次任务和标定配置见 [观察计划指南](ROBOT-OBSERVATION-PLAN.zh.md)。观察不隐式移动机械臂。
+
+MuJoCo 仿真（0.7.2.dev4）支持 `/observe` 和模型 `camera_observe`：每次一张新 RGB-D，
+可绑定 plan 问题自动计算、写回。`/video` 仍仅支持 real/local 连续相机。
+JSONL 在有图片时附加可选 `content`，MCP 返回 ImageContent；两者保留原工具结果。

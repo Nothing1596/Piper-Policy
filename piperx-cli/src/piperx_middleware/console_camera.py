@@ -31,7 +31,7 @@ async def pixel(root, u, v):
 async def worker(config, args):
     proc = await asyncio.create_subprocess_exec(
         config.get('python', sys.executable), str(Path(__file__).with_name('camera_capture.py')), *args,
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
     except BaseException:

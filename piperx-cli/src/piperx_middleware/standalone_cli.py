@@ -1,6 +1,7 @@
 """Standalone robot CLI, including simulator and MCP entry points."""
 import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -40,12 +41,22 @@ def main(argv=None):
         parser.add_argument('--url')
         parser.add_argument('--workspace', type=Path, required=True)
         parser.add_argument('--output', required=True)
+        parser.add_argument('--serial', help='Simulator camera serial: mujoco-overview (default) or mujoco-wrist')
         a = parser.parse_args(args[1:])
         from .client import RobotClient
         from .simulation_camera import capture
-        client = RobotClient.from_env(root=a.root, url=a.url)
+        from .cli import configured_url
+        from .managed_runtime import read_runtime_json, validate_runtime_url
+        explicit = a.url or os.environ.get('PIPERX_URL')
+        runtime = read_runtime_json(a.root/'runtime.json') if not explicit else None
+        url = explicit or (validate_runtime_url(runtime['url']) if runtime else configured_url(a.root))
+        client = RobotClient.from_env(root=a.root, url=url)
         try:
-            print(json.dumps(capture(client, a.workspace, a.output), indent=2))
+            if runtime:
+                actual = client.call('GET','/v1/capabilities')
+                if actual.get('instance_id') != runtime['instance_id'] or actual.get('backend') != runtime['backend']:
+                    raise ValueError('Executor identity differs from this profile runtime; reconnect the frontend')
+            print(json.dumps(capture(client, a.workspace, a.output, serial=a.serial), indent=2))
         finally:
             client.close()
         return 0

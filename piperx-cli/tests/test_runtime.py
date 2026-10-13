@@ -144,6 +144,26 @@ def test_linear_unreachable_no_write(service):
     assert not service.backend.commands
 
 
+def test_linear_reference_waits_for_delayed_measured_tracking(tmp_path):
+    class Delayed(SimBackend):
+        def __init__(self):
+            super().__init__();self.q=[0.,45.,-60.,0.,20.,0.];self.target=list(self.q);self.gaps=[]
+        def joint_target(self,joints):
+            self.gaps.append(max(abs(a-b) for a,b in zip(joints,self.q)))
+            self.target=list(joints);self.commands.append(('joint',list(joints)))
+        def snapshot(self):
+            # Feedback takes several controller periods to follow a target.
+            self.q=[a+max(-.025,min(.025,b-a)) for a,b in zip(self.q,self.target)]
+            return super().snapshot()
+    b=Delayed();s=RobotService(b,Settings(data_dir=tmp_path));s.connect()
+    try:
+        kin=PiperKinematics();target=kin.pose(b.q)['xyz_m'];target[2]+=.004
+        result=wait(s,s.primitive(MoveLinear(xyz_m=target,step_m=.001,timeout_s=9), 'delayed-linear-1'))
+        assert result['status']=='succeeded',result
+        assert b.gaps and max(b.gaps)<=.221
+    finally:s.close()
+
+
 def test_role_boundary_and_schemas(service):
     model, operator = "m"*40, "o"*40
     with TestClient(create_app(service, model, operator)) as c:

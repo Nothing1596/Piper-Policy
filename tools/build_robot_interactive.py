@@ -15,6 +15,8 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--wheel',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--video-wheel',type=Path,help='Optional independent piper-video wheel for demonstration integration')
+    parser.add_argument('--detector-onnx',type=Path,help='Optional detector with adjacent SOURCE.json and LICENSE')
     args=parser.parse_args()
     repo=Path(__file__).resolve().parents[1]
     version=args.wheel.name.split('-')[1]
@@ -22,6 +24,14 @@ def main():
     root=args.output/name
     root.mkdir(parents=True,exist_ok=False)
     shutil.copy2(args.wheel,root/args.wheel.name)
+    if args.video_wheel:
+        (root/'video-wheel').mkdir()
+        shutil.copy2(args.video_wheel,root/'video-wheel'/args.video_wheel.name)
+    if args.detector_onnx:
+        (root/'models').mkdir()
+        shutil.copy2(args.detector_onnx,root/'models/yolo11n.onnx')
+        for filename in ('SOURCE.json','LICENSE'):
+            shutil.copy2(args.detector_onnx.parent/filename,root/'models'/filename)
     source=root/'source'/'piperx-cli'
     source.parent.mkdir()
     shutil.copytree(repo/'piperx-cli',source,ignore=shutil.ignore_patterns(
@@ -33,13 +43,18 @@ def main():
                 'ROBOT-INTERACTIVE.zh.md', 'ROBOT-CLI-REFERENCE.md',
                 f'ROBOT-RELEASE-{version}.md'):
         shutil.copy2(repo/'docs'/doc,root/doc)
+    for doc in ('ROBOT-LIVE-VIDEO.zh.md','ROBOT-DEMONSTRATION.zh.md','ROBOT-OBSERVATION-PLAN.zh.md','DEMO-AND-LIVE-CONTEXT.zh.md'):
+        if (repo/'docs'/doc).exists():shutil.copy2(repo/'docs'/doc,root/doc)
     shutil.copy2(repo/'gpt.md',root/'source'/'gpt.md')
+    shutil.copy2(repo/'tools/parallels_mcp.py',root/'parallels_mcp.py')
     if (repo/'LICENSE').exists():shutil.copy2(repo/'LICENSE',root/'LICENSE')
     # An isolated venv; never edits an existing installation or robot profile.
     (root/'install.py').write_text('''"""Install into this kit's .venv; downloads platform dependencies."""
 import pathlib,subprocess,sys,venv
 r=pathlib.Path(__file__).resolve().parent
 if sys.version_info<(3,11):raise SystemExit('Python 3.11+ required; Windows CANDO requires x64 Python.')
+video_wheels=list((r/'video-wheel').glob('*.whl'))
+if video_wheels and sys.version_info<(3,12):raise SystemExit('This demonstration kit requires Python 3.12+.')
 p=r/'.venv'
 if p.exists():raise SystemExit('Existing .venv preserved. Use a fresh extracted kit for an upgrade.')
 venv.EnvBuilder(with_pip=True).create(p)
@@ -49,12 +64,25 @@ if len(wheels)!=1:raise SystemExit('Expected exactly one project wheel')
 subprocess.run([str(exe),'-m','pip','install',str(wheels[0])+'[simulation,hardware]'],check=True)
 subprocess.run([str(exe),'-m','pip','check'],check=True)
 subprocess.run([str(exe),'-m','piperx_middleware.standalone_cli','--help'],check=True)
+if video_wheels:
+ if len(video_wheels)!=1:raise SystemExit('Expected exactly one independent video wheel')
+ vp=r/'.video-venv'
+ if vp.exists():raise SystemExit('Existing .video-venv preserved; use a fresh kit')
+ venv.EnvBuilder(with_pip=True).create(vp)
+ vex=vp/('Scripts/python.exe' if sys.platform=='win32' else 'bin/python')
+ subprocess.run([str(vex),'-m','pip','install',str(video_wheels[0])+'[video,model,mcp,onnx]'],check=True)
+ subprocess.run([str(vex),'-m','pip','check'],check=True)
+ subprocess.run([str(vex),'-m','piperlab.video_entry','--help'],check=True)
 print('Installed. Launch piper-robot.cmd (Windows) or ./piper-robot (macOS/Linux). No hardware opened.')
 ''',encoding='utf-8')
     (root/'Setup.cmd').write_text('@echo off\r\npy -3 "%~dp0install.py"\r\nexit /b %errorlevel%\r\n')
-    (root/'piper-robot.cmd').write_text('@echo off\r\n"%~dp0.venv\\Scripts\\python.exe" -m piperx_middleware.standalone_cli %*\r\nexit /b %errorlevel%\r\n')
-    (root/'piper-robot').write_text('#!/bin/sh\nTASK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$TASK_DIR/.venv/bin/python" -m piperx_middleware.standalone_cli "$@"\n')
+    (root/'piper-robot.cmd').write_text('@echo off\r\nif exist "%~dp0.video-venv\\Scripts\\python.exe" set "PIPER_VIDEO_PYTHON=%~dp0.video-venv\\Scripts\\python.exe"\r\nif exist "%~dp0models\\yolo11n.onnx" set "PIPER_VIDEO_DETECTOR=%~dp0models\\yolo11n.onnx"\r\n"%~dp0.venv\\Scripts\\python.exe" -m piperx_middleware.standalone_cli %*\r\nexit /b %errorlevel%\r\n')
+    (root/'piper-robot').write_text('#!/bin/sh\nTASK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nif [ -x "$TASK_DIR/.video-venv/bin/python" ]; then export PIPER_VIDEO_PYTHON="$TASK_DIR/.video-venv/bin/python"; fi\nif [ -f "$TASK_DIR/models/yolo11n.onnx" ]; then export PIPER_VIDEO_DETECTOR="$TASK_DIR/models/yolo11n.onnx"; fi\nif [ -z "${PIPER_VIDEO_MODEL_CONFIG:-}" ] && [ -f "$HOME/.config/piper-robot/vision-profile.json" ]; then export PIPER_VIDEO_MODEL_CONFIG="$HOME/.config/piper-robot/vision-profile.json"; fi\nexec "$TASK_DIR/.venv/bin/python" -m piperx_middleware.standalone_cli "$@"\n')
     (root/'piper-robot').chmod(0o755)
+    (root/'Piper-Robot.command').write_text('#!/bin/sh\nTASK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$TASK_DIR/piper-robot" "$@"\n')
+    (root/'Piper-Robot.command').chmod(0o755)
+    (root/'Setup.command').write_text('#!/bin/sh\nTASK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec python3 "$TASK_DIR/install.py"\n')
+    (root/'Setup.command').chmod(0o755)
     (root/'INSTALL.txt').write_text('''安装：需要 Python 3.11+；Windows CANDO 使用 x64 Python（WOA 的 x64 模拟）。
 首次安装下载依赖，需要网络。这不是离线包，不包含厂商 CAN 驱动或 SDK。
 Windows：在包目录运行 py -3 install.py，随后 piper-robot.cmd。

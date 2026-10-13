@@ -106,6 +106,7 @@
                     <inertial pos="0.001152 0.000782 0.004798" mass="0.04" fullinertia="0.00000994 0.00001051 0.00001965 0 0 0"/>
                     <geom name="flange_geom" type="mesh" mesh="flange" material="arm_metal"/>
                     <site name="tcp" pos="0 0 0.1425" quat="1 0 0 0" size="0.005" rgba="1 0 0 0.5"/>
+                    <camera name="wrist_camera" pos="0 -0.068 0.055" xyaxes="1 0 0 0 -0.9063078 0.4226183" fovy="65"/>
 
                     <body name="gripper_base" pos="0 0 0.0045" quat="0.7071068 0 0 0.7071068">
                       <inertial pos="-0.000184 0.000081 0.032144" mass="0.45" fullinertia="0.00092934 0.00071447 0.00039442 0.00000034 -0.00000738 0.00000005"/>
