@@ -177,5 +177,32 @@ def test_completed_request_retrieval_never_repeats_commands(tmp_path):
             "Duplicate request_id must not replay motion - intentional recovery semantics"
 
 
+def test_fresh_simulation_auto_needs_no_threshold_setup(tmp_path):
+    """First-use defaults admit a valid move through HTTP without approval setup."""
+    service = RobotService(SimBackend(), Settings(data_dir=tmp_path, managed_control=True))
+    with TestClient(create_app(service, 'm'*48, 'o'*48)) as client:
+        assert client.post('/v1/connect', headers=MODEL).status_code == 200
+        _, session = acquire(client)
+        assert service.policy.mode == 'auto'
+        assert service.policy.automatic.max_joint_step_deg is None
+        response = move(client, session, 'first-simulation-move')
+        assert response.status_code == 200, response.text
+        job = response.json()
+        deadline = time.monotonic() + 5
+        while job['status'] in ('accepted', 'running'):
+            assert time.monotonic() < deadline
+            time.sleep(.01)
+            job = client.get(f'/v1/jobs/{job["job_id"]}', headers=MODEL).json()
+        assert job['status'] == 'succeeded'
+        assert not service.pending_plans
+        sent_before_rejection = len(service.backend.commands)
+        # Auto still goes through the same hard-limit checks.
+        bad = dict(MOVE, joints_deg=[999., 0., 0., 0., 0., 0.])
+        response = move(client, session, 'invalid-simulation-move', bad)
+        assert response.status_code == 422, response.text
+        assert response.json()['error']['code'] == 'joint_limits'
+        assert len(service.backend.commands) == sent_before_rejection
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

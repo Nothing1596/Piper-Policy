@@ -11,7 +11,6 @@ import argparse
 import asyncio
 import inspect
 import json
-import math
 import os
 import re
 import secrets
@@ -35,7 +34,7 @@ except ImportError:
 from . import cli_views
 from .cli import configured_url
 from .console_bridge import MCPBridge
-from .manual_parser import parse_manual_command
+from .manual_parser import parse_manual_command, validate_literal
 from .model_agent import (
     ModelConfig,
     check_model,
@@ -239,48 +238,8 @@ class ConsoleController:
 
     @staticmethod
     def _validate_finite_literals(val: Any, depth: int = 0, state: dict[str, int] | None = None) -> None:
-        if state is None:
-            state = {"total_length": 0}
-        if depth > 20:
-            raise ValueError("Argument nesting exceeds maximum depth of 20")
-        if isinstance(val, tuple):
-            raise ValueError("Tuples are not allowed in arguments")
-        if isinstance(val, bool) or val is None:
-            return
-        if isinstance(val, (int, float)):
-            try:
-                if not math.isfinite(val):
-                    raise ValueError(f"Non-finite number: {val}")
-            except OverflowError:
-                raise ValueError("Number out of range (overflow)")
-            return
-        if isinstance(val, str):
-            if len(val) > 100000:
-                raise ValueError("String argument exceeds 100k length limit")
-            state["total_length"] += len(val)
-            if state["total_length"] > 200000:
-                raise ValueError("Total argument length exceeds limit")
-            return
-        if isinstance(val, list):
-            if len(val) > 1000:
-                raise ValueError("Array argument exceeds 1000 elements limit")
-            for item in val:
-                ConsoleController._validate_finite_literals(item, depth + 1, state)
-            return
-        if isinstance(val, dict):
-            if len(val) > 500:
-                raise ValueError("Object argument exceeds 500 keys limit")
-            for k, v in val.items():
-                if not isinstance(k, str):
-                    raise ValueError("Object keys must be strings")
-                if len(k) > 1000:
-                    raise ValueError("Object key exceeds length limit")
-                state["total_length"] += len(k)
-                if state["total_length"] > 200000:
-                    raise ValueError("Total argument length exceeds limit")
-                ConsoleController._validate_finite_literals(v, depth + 1, state)
-            return
-        raise ValueError(f"Unsupported argument value type: {type(val).__name__}")
+        validate_literal(val, depth, state, max_string_length=100000,
+                         max_list_size=1000, max_total_length=200000)
 
     async def invoke_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
         """Validate schema, inject request_id, call tool, and poll job until terminal."""

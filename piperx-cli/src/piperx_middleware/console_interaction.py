@@ -1,4 +1,4 @@
-"""Interactive console extensions for PiperX middleware 0.4.0.
+"""Managed single-terminal interaction for Piper Robot.
 
 Provides InteractiveConsoleController with operator-auth sessions, approval policies,
 managed runtime switching/shutdown, interactive limits wizard, and live approval tracking.
@@ -25,10 +25,10 @@ INTERACTIVE_SLASH_COMMANDS = [
     ("/approval", "Inspect or set approval mode [always|risk|auto]"),
     ("/approve", "Approve a pending job: /approve <job_id>"),
     ("/deny", "Deny a pending job: /deny <job_id>"),
-    ("/limits", "Inspect or set interaction limits: /limits [JSON]"),
+    ("/limits", "Show limits and open a guided editor; JSON is optional"),
     ("/config", "Inspect managed configuration: /config [JSON]"),
-    ("/confirm", "Confirm a pending configuration proposal: /confirm <code>"),
-    ("/cancel", "Cancel a pending configuration proposal: /cancel <code>"),
+    ("/confirm", "Confirm a pending configuration proposal: /confirm [code]"),
+    ("/cancel", "Cancel a pending configuration proposal: /cancel [code]"),
     ("/remote", "List or add remote targets: /remote [add NAME SSH_HOST]"),
     ("/mode", "Switch execution mode: /mode [simulation|real] [TARGET]"),
     ("/shutdown", "Gracefully shut down managed executor and exit"),
@@ -266,6 +266,11 @@ class InteractiveConsoleController(ConsoleController):
         for cmd, desc in self.slash_commands:
             self.emit(f"  {cmd:<15} {desc}")
         self.emit("")
+        self.emit("开始：/connect → /status → /tools；用 /manual 工具名(参数) 调用工具。")
+        self.emit("新仿真默认 auto，无需配置审批阈值；真机默认 risk。已有配置保持不变。")
+        self.emit("/limits 打开填写向导，回车保留原值；无需手写 JSON。")
+        self.emit("配置修改后 /confirm 确认、/cancel 取消；多项待确认时需指定编号。")
+        self.emit("等待动作审批时可用 /status、/jobs、/stop；/quit 等待动作结束后退出。")
         self.emit("Plain text prompts are sent to the configured model agent.")
         self.emit("Ctrl-C cancels the active local task; use /stop for robot motion cancellation.")
 
@@ -279,7 +284,7 @@ class InteractiveConsoleController(ConsoleController):
     def _show_retained_constraints(self, policy: dict[str, Any]) -> None:
         auto = policy.get("automatic") or {}
         limits = policy.get("limits") or {}
-        self.emit("  Automatic approval thresholds:")
+        self.emit("  Automatic approval thresholds (used only in risk mode):")
         self.emit(f"    max_joint_step_deg:  {auto.get('max_joint_step_deg', '[unconfigured - ask]')}")
         self.emit(f"    max_tcp_step_m:      {auto.get('max_tcp_step_m', '[unconfigured - ask]')}")
         self.emit(f"    max_speed_percent:   {auto.get('max_speed_percent', '[unconfigured - ask]')}")
@@ -291,8 +296,10 @@ class InteractiveConsoleController(ConsoleController):
 
     async def _cmd_confirm(self, rest: str) -> None:
         code = rest.strip().upper()
+        if not code and len(self._proposals) == 1:
+            code = next(iter(self._proposals))
         if not code:
-            self.emit("Usage: /confirm <code>")
+            self.emit("No single pending change. Use /confirm CODE when multiple changes are pending.")
             return
         prop = self._proposals.pop(code, None)
         if prop is None:
@@ -322,8 +329,10 @@ class InteractiveConsoleController(ConsoleController):
 
     async def _cmd_cancel(self, rest: str) -> None:
         code = rest.strip().upper()
+        if not code and len(self._proposals) == 1:
+            code = next(iter(self._proposals))
         if not code:
-            self.emit("Usage: /cancel <code>")
+            self.emit("No single pending change. Use /cancel CODE when multiple changes are pending.")
             return
         prop = self._proposals.pop(code, None)
         if prop is None:
@@ -331,35 +340,39 @@ class InteractiveConsoleController(ConsoleController):
             return
         self.emit(f"Proposal {code} cancelled ({prop.description}).")
 
+    async def _read_interaction(self) -> dict[str, Any] | None:
+        """Do not build edits from defaults when the current policy is unknown."""
+        try:
+            result = await self.operator_call("GET", "/operator/interaction")
+            if (isinstance(result, dict) and "error" not in result
+                    and isinstance(result.get("policy"), dict) and result["policy"]):
+                return result
+        except Exception as exc:
+            self.emit(f"Failed to read current policy: {type(exc).__name__}")
+        self.emit("Could not retrieve current policy; editor not opened. Retry after reconnecting.")
+        return None
+
     async def _cmd_approval(self, rest: str) -> None:
         trimmed = rest.strip().lower()
-        if not trimmed:
-            try:
-                res = await self.operator_call("GET", "/operator/interaction")
-                if isinstance(res, dict) and "policy" in res:
-                    policy = res.get("policy") or {}
-                    mode = policy.get("mode", "unknown")
-                    self.approval_mode = mode
-                    self.emit(f"Current approval mode: {mode}")
-                    if mode == "auto":
-                        self._show_retained_constraints(policy)
-                else:
-                    self.emit(f"Current approval mode: {self.approval_mode}")
-            except Exception as exc:
-                self.emit(f"Failed to retrieve approval policy: {type(exc).__name__}")
-            return
-
-        if trimmed not in ("always", "risk", "auto"):
+        if trimmed and trimmed not in ("always", "risk", "auto"):
             self.emit(f"Invalid approval mode '{trimmed}'. Allowed: always, risk, auto.")
             return
-
-        try:
-            current = await self.operator_call("GET", "/operator/interaction")
-            current_policy = (current.get("policy") if isinstance(current, dict) else {}) or {}
-        except Exception as exc:
-            self.emit(f"Failed to retrieve current policy: {type(exc).__name__}")
+        current = await self._read_interaction()
+        if current is None:
+            return
+        current_policy = current["policy"]
+        self.approval_mode = current_policy.get("mode", "unknown")
+        if not trimmed:
+            self.emit(f"Current approval mode: {self.approval_mode}")
+            if self.approval_mode == "auto":
+                self._show_retained_constraints(current_policy)
             return
 
+        # With an older proposal pending, even a request to keep the current
+        # setting must become an explicit alternative, not confirm the old edit.
+        if current_policy.get("mode") == trimmed and not self._proposals:
+            self.emit(f"Approval mode is already {trimmed}; no change needed.")
+            return
         proposed_policy = dict(current_policy)
         proposed_policy["mode"] = trimmed
 
@@ -375,7 +388,7 @@ class InteractiveConsoleController(ConsoleController):
             body=proposed_policy,
         )
         self.emit(f"Confirmation required: Proposal {code} bound to exact policy change.")
-        self.emit(f"Type /confirm {code} to apply mode '{trimmed}', or /cancel {code} to reject.")
+        self.emit(f"Type /confirm to apply mode '{trimmed}', or /cancel to reject (if multiple pending: /confirm {code}).")
 
     async def _cmd_approve(self, rest: str) -> None:
         job_id = rest.strip()
@@ -462,14 +475,15 @@ class InteractiveConsoleController(ConsoleController):
                 self.emit(f"Invalid JSON for /limits: {exc}")
                 return
 
-            try:
-                current = await self.operator_call("GET", "/operator/interaction")
-                current_policy = (current.get("policy") if isinstance(current, dict) else {}) or {}
-            except Exception as exc:
-                self.emit(f"Failed to get current policy: {type(exc).__name__}")
-                return
-
+        current = await self._read_interaction()
+        if current is None:
+            return
+        current_policy = current["policy"]
+        if trimmed:
             proposed_policy = self._merge_limits_payload(current_policy, new_payload)
+            if proposed_policy == current_policy and not self._proposals:
+                self.emit("Limits unchanged; nothing to confirm.")
+                return
 
             code = self._generate_proposal_code()
             self._proposals[code] = Proposal(
@@ -480,22 +494,14 @@ class InteractiveConsoleController(ConsoleController):
             )
             self.emit(f"Confirmation required: Proposal {code} - Update interaction limits.")
             self.emit(f"Proposed limits diff:\n{json.dumps({'limits': proposed_policy.get('limits'), 'automatic': proposed_policy.get('automatic')}, indent=2)}")
-            self.emit(f"Type /confirm {code} to apply, or /cancel {code} to reject.")
+            self.emit(f"Type /confirm to apply, or /cancel to reject (if multiple pending: /confirm {code}).")
             return
 
-        current_policy: dict[str, Any] = {}
-        try:
-            res = await self.operator_call("GET", "/operator/interaction")
-            if isinstance(res, dict):
-                current_policy = res.get("policy") or {}
-                eff = res.get("effective_limits") or current_policy.get("limits") or {}
-                self.emit(f"Effective execution limits: {json.dumps(eff, indent=2)}")
-                auto = current_policy.get("automatic") or {}
-                self.emit(f"Automatic approval thresholds: {json.dumps(auto, indent=2)}")
-            else:
-                self.emit("Could not retrieve limits from operator.")
-        except Exception as exc:
-            self.emit(f"Failed to get limits: {type(exc).__name__}")
+        eff = current.get("effective_limits") or current_policy.get("limits") or {}
+        self.emit(f"Effective execution limits: {json.dumps(eff, indent=2)}")
+        auto = current_policy.get("automatic") or {}
+        if current_policy.get("mode") == "risk":
+            self.emit(f"Automatic approval thresholds: {json.dumps(auto, indent=2)}")
 
         if self.prompt is None:
             self.emit("To update limits, pass a JSON object: /limits {\"limits\": {...}, \"automatic\": {...}}")
@@ -521,30 +527,37 @@ class InteractiveConsoleController(ConsoleController):
             if gripper_min.strip():
                 limits["gripper_min_m"] = float(gripper_min.strip())
 
-            self.emit("--- Automatic Approval Thresholds ---")
-            j_step_cur = auto.get("max_joint_step_deg", "unconfigured")
-            j_step = await self.prompt(f"Auto max joint step deg [{j_step_cur}]: ")
-            if j_step.strip():
-                auto["max_joint_step_deg"] = float(j_step.strip())
+            if current_policy.get("mode") == "risk":
+                self.emit("--- Automatic Approval Thresholds ---")
+                j_step_cur = auto.get("max_joint_step_deg", "unconfigured")
+                j_step = await self.prompt(f"Auto max joint step deg [{j_step_cur}]: ")
+                if j_step.strip():
+                    auto["max_joint_step_deg"] = float(j_step.strip())
 
-            tcp_step_cur = auto.get("max_tcp_step_m", "unconfigured")
-            tcp_step = await self.prompt(f"Auto max TCP step m [{tcp_step_cur}]: ")
-            if tcp_step.strip():
-                auto["max_tcp_step_m"] = float(tcp_step.strip())
+                tcp_step_cur = auto.get("max_tcp_step_m", "unconfigured")
+                tcp_step = await self.prompt(f"Auto max TCP step m [{tcp_step_cur}]: ")
+                if tcp_step.strip():
+                    auto["max_tcp_step_m"] = float(tcp_step.strip())
 
-            auto_spd_cur = auto.get("max_speed_percent", "unconfigured")
-            auto_spd = await self.prompt(f"Auto max speed percent (int) [{auto_spd_cur}]: ")
-            if auto_spd.strip():
-                auto["max_speed_percent"] = int(auto_spd.strip())
+                auto_spd_cur = auto.get("max_speed_percent", "unconfigured")
+                auto_spd = await self.prompt(f"Auto max speed percent (int) [{auto_spd_cur}]: ")
+                if auto_spd.strip():
+                    auto["max_speed_percent"] = int(auto_spd.strip())
 
-            effort_cur = auto.get("max_effort_protocol", "unconfigured")
-            effort = await self.prompt(f"Auto max effort protocol float [{effort_cur}]: ")
-            if effort.strip():
-                auto["max_effort_protocol"] = float(effort.strip())
+                effort_cur = auto.get("max_effort_protocol", "unconfigured")
+                effort = await self.prompt(f"Auto max effort protocol float [{effort_cur}]: ")
+                if effort.strip():
+                    auto["max_effort_protocol"] = float(effort.strip())
+
+            else:
+                self.emit("Automatic thresholds are only used in risk mode; existing values kept.")
 
             proposed_policy = dict(current_policy)
             proposed_policy["limits"] = limits
             proposed_policy["automatic"] = auto
+            if proposed_policy == current_policy and not self._proposals:
+                self.emit("Limits unchanged; nothing to confirm.")
+                return
 
             code = self._generate_proposal_code()
             self._proposals[code] = Proposal(
@@ -555,7 +568,7 @@ class InteractiveConsoleController(ConsoleController):
             )
             self.emit(f"Confirmation required: Proposal {code} - Update limits via wizard.")
             self.emit(f"Proposed policy:\n{json.dumps({'limits': limits, 'automatic': auto}, indent=2)}")
-            self.emit(f"Type /confirm {code} to apply, or /cancel {code} to reject.")
+            self.emit(f"Type /confirm to apply, or /cancel to reject (if multiple pending: /confirm {code}).")
         except Exception as exc:
             self.emit(f"Limits wizard cancelled or failed: {type(exc).__name__}")
 
@@ -593,7 +606,7 @@ class InteractiveConsoleController(ConsoleController):
         )
         self.emit(f"Confirmation required: Proposal {code} - Update managed configuration.")
         self.emit(f"Proposed config: {json.dumps(cfg, indent=2)}")
-        self.emit(f"Type /confirm {code} to apply, or /cancel {code} to reject.")
+        self.emit(f"Type /confirm to apply, or /cancel to reject (if multiple pending: /confirm {code}).")
 
     async def _cmd_remote(self, rest: str) -> None:
         if self.managed is None or not hasattr(self.managed, "remotes"):

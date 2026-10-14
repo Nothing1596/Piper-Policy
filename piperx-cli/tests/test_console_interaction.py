@@ -363,3 +363,88 @@ async def test_choose_startup_raises_on_invalid_mode():
 
     with pytest.raises(ValueError, match="Invalid mode 'invalid_mode'"):
         await choose_startup(bad_prompt)
+
+
+@pytest.mark.asyncio
+async def test_confirm_without_code_only_when_unambiguous(setup_env):
+    controller, _, _, operator, _ = setup_env
+    await controller.handle_line('/approval auto')
+    await controller.handle_line('/confirm')
+    assert operator.policy['mode'] == 'auto'
+    await controller.handle_line('/approval risk')
+    await controller.handle_line('/approval always')
+    await controller.handle_line('/confirm')
+    assert operator.policy['mode'] == 'auto'
+    assert len(controller._proposals) == 2
+    code = next(iter(controller._proposals))
+    await controller.handle_line(f'/cancel {code}')
+    await controller.handle_line('/cancel')
+    assert not controller._proposals
+    assert operator.policy['mode'] == 'auto'
+
+
+@pytest.mark.asyncio
+async def test_unchanged_policy_and_limits_do_not_prompt(setup_env):
+    controller, _, _, operator, emitted = setup_env
+    before = json.loads(json.dumps(operator.policy))
+    await controller.handle_line('/approval risk')
+    await controller.handle_line('/limits {}')
+    async def keep(_):
+        return ''
+    controller.prompt = keep
+    await controller.handle_line('/limits')
+    assert not controller._proposals
+    assert operator.policy == before
+    assert any('nothing to confirm' in line for line in emitted)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('failure', [None, {'error': {'code': 'session_lost'}}, {'policy': {}}])
+@pytest.mark.parametrize('command', ['/limits', '/limits {"limits": {"max_speed_percent": 5}}', '/approval auto'])
+async def test_policy_edits_require_current_policy(setup_env, failure, command):
+    controller, _, _, _, emitted = setup_env
+    async def unavailable(*args):
+        return failure
+    async def unexpected_prompt(_):
+        pytest.fail('Cannot edit unknown policy')
+    controller.operator_call = unavailable
+    controller.prompt = unexpected_prompt
+    await controller.handle_line(command)
+    assert not controller._proposals
+    assert any('editor not opened' in line for line in emitted)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('command', ['/approval risk', '/limits {}', '/limits'])
+async def test_noop_after_proposal_cannot_confirm_older_change(setup_env, command):
+    controller, _, _, operator, _ = setup_env
+    async def keep(_):
+        return ''
+    controller.prompt = keep
+    await controller.handle_line('/approval auto')
+    await controller.handle_line(command)
+    await controller.handle_line('/confirm')
+    assert operator.policy['mode'] == 'risk'
+    assert len(controller._proposals) == 2  # Choose explicitly, never guess.
+    latest = list(controller._proposals)[-1]
+    await controller.handle_line(f'/confirm {latest}')
+    assert operator.policy['mode'] == 'risk'
+    assert not controller._proposals
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('mode', ['auto', 'always'])
+async def test_wizard_skips_inactive_thresholds_and_preserves_them(setup_env, mode):
+    controller, _, _, operator, _ = setup_env
+    operator.policy['mode'] = mode
+    before = dict(operator.policy['automatic'])
+    prompts = []
+    async def answer(text):
+        prompts.append(text)
+        return '50' if len(prompts) == 1 else ''
+    controller.prompt = answer
+    await controller.handle_line('/limits')
+    assert len(prompts) == 3
+    await controller.handle_line('/confirm')
+    assert operator.policy['limits']['max_speed_percent'] == 50
+    assert operator.policy['automatic'] == before
