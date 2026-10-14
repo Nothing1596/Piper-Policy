@@ -696,3 +696,17 @@ class TestEndToEndRealVideo:
             assert demo_id == demo["demo_id"]
             loaded = store.get(demo_id)
             assert all(Path(f["image_path"]).is_file() for f in loaded["frames"])
+
+
+def test_compiler_splits_batches_to_configured_model_budget(tmp_path):
+    source=tmp_path/'synthetic.mp4';source.write_bytes(b'synthetic fixture')
+    model=FakeModel();model.max_images=3
+    original=model.infer
+    def bounded(prompt,images,schema):
+        assert len(images)<=3
+        return original(prompt,images,schema)
+    model.infer=bounded
+    result=compile_demo(str(source),str(tmp_path/'demo'),'fixture task',model,
+                        candidate_builder=make_fake_builder(frame_count=7))
+    assert result['parameters']['images_per_call']==3
+    assert len(model.calls)>=4  # three selection batches and semantic review

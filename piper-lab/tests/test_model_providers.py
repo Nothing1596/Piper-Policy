@@ -47,6 +47,20 @@ def test_multimodal_wire_contract(monkeypatch, tmp_path, provider, endpoint, hea
     assert 'test-secret' not in next((tmp_path/'calls').glob('*.json')).read_text()
 
 
+def test_compatible_low_effort_and_key_file_reference(monkeypatch,tmp_path):
+    key=tmp_path/'private.key';key.write_text('fixture-key')
+    calls=[]
+    def handler(req):
+        calls.append(json.loads(req.content))
+        assert req.headers['authorization']=='Bearer fixture-key'
+        return httpx.Response(200,json=response('openai-compatible'))
+    mock_transport(monkeypatch,handler)
+    model=p.ApiVisionModel(p.ModelProfile(provider='openai-compatible',model='deepseek-flash',
+        base_url='https://example.invalid/v1',api_key_env='UNSET_TEST_KEY',api_key_file=str(key),reasoning_effort='low'))
+    assert model.infer('fixture',[],SCHEMA)=={'answer':'visible'}
+    assert calls[0]['reasoning_effort']=='low'
+
+
 @pytest.mark.parametrize('provider', ['openai','openai-compatible','anthropic','gemini'])
 def test_reject_truncated_json_even_if_parseable(monkeypatch, provider):
     raw=response(provider)

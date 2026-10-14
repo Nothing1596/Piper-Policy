@@ -54,7 +54,13 @@ def test_simulation_observe_returns_pixels_and_no_ground_truth(tmp_path):
             assert path=='/v1/simulation/observation'
             return {'rgb_jpeg_b64':base64.b64encode(rgb.getvalue()).decode(),
                     'depth_npy_b64':base64.b64encode(depth.getvalue()).decode(),
-                    'camera_info':{},'source_stamp_s':1,'epoch':0}
+                    'camera_info':{'intrinsics':[[10,0,4],[0,10,4],[0,0,1]],
+                                   'base_from_camera':np.eye(4).tolist()},
+                    'provenance':'mujoco_sensor','instance_id':'sim-test','connection_epoch':1,
+                    'robot_alignment':{'offset_s':0.,'request_latency_s':0.,'state':{
+                        'robot':{'q_deg':[0]*6,'velocity_deg_s':[0]*6,'feedback_age_s':0.},
+                        'observation_identity':{'instance_id':'sim-test','connection_epoch':1}}},
+                    'source_stamp_s':1,'epoch':0}
     async def run():
         server=create_server(tmp_path,robot_client=Client())
         result=await server.call_tool('simulation_observe',{'output':'frame'})
