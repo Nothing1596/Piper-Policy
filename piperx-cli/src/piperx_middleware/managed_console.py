@@ -159,6 +159,14 @@ class ManagedConsole:
 
 
 async def run_managed_console(args, base):
+    if getattr(args, 'agent_mcp', False):
+        if getattr(args, 'agent', False):
+            raise SystemExit('Choose --agent or --agent-mcp')
+        from .frontend_mcp import run_frontend_mcp
+        return await run_frontend_mcp(args, base)
+    if getattr(args, 'agent', False):
+        from .agent_console import run_agent_console
+        return await run_agent_console(args, base)
     from .console import HAVE_PROMPT_TOOLKIT, ConsoleCompleter
     from .console_interaction import InteractiveConsoleController
     interactive = sys.stdin.isatty()
