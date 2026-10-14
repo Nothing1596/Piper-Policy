@@ -1,6 +1,8 @@
 """Deterministic operator approval policy.
 
-Hard limits raise DomainError in every approval mode; they never become asks.
+Controller limits raise DomainError in every approval mode. Operator-enabled
+force permits only an existing <=5 degree model/site overrun, with per-request
+approval and no new or increasing overrun.
 The mode only controls prompting: 'always' asks for every write, 'risk' asks
 for critical control-mode transitions and for missing or exceeded automatic
 thresholds, and 'auto' skips prompts while hard limits still apply.
@@ -49,7 +51,7 @@ _OPERATOR_ONLY_FIELDS = frozenset({
     'max_move_deg', 'max_velocity_deg_s', 'gripper_max_m', 'gripper_effort_limit',
     'feedback_timeout_s', 'plan_ttl_s', 'tcp_offset_m', 'tcp_offset_rpy_deg',
     'interaction_policy', 'limits', 'automatic', 'approval_mode', 'mode',
-    'target', 'policy',
+    'target', 'policy', 'force',
 })
 
 
@@ -302,6 +304,23 @@ class PolicyEngine:
         gripper_min = effective_limits['gripper_min_m']
         gripper_max = effective_limits['gripper_max_m']
 
+        recovery = None
+        if self.policy.force and isinstance(move, (JointMove, ControlMode)):
+            from .recovery_limits import recovery_bounds, check_bounds
+            current = _finite_vector(robot.get('q_deg'), JOINT_COUNT, 'state.q_deg', 'invalid_state')
+            recovery = recovery_bounds(current, effective_limits['joint_lower_deg'],
+                                       effective_limits['joint_upper_deg'])
+            targets = [list(move.joints_deg)] if isinstance(move, JointMove) else [current]
+            for point in targets:
+                check_bounds(point, recovery)
+            # Hardware-reported bounds are not reprogrammed or relaxed by force.
+            if rows is not None:
+                for point in [current] + targets:
+                    for i, row in enumerate(rows):
+                        if row is not None and not row[0] <= point[i] <= row[1]:
+                            raise DomainError('measured_joint_limits',
+                                'Recovery cannot override queried controller limits.', 422)
+
         joint_step_deg = None
         tcp_step_m = None
         if isinstance(move, JointMove):
@@ -309,7 +328,11 @@ class PolicyEngine:
             waypoints = _resolution_waypoints(resolution)
             points = [('target', list(move.joints_deg))] + \
                      [(f'linear waypoint {i + 1}', point) for i, point in enumerate(waypoints)]
-            self._check_joint_points(points, rows)
+            if recovery is None:
+                self._check_joint_points(points, rows)
+            else:
+                for _, point in points:
+                    check_bounds(point, recovery)
             # Excursion is measured against every commanded point: an
             # intermediate waypoint may be farther from the measured pose than
             # the final goal.
@@ -341,6 +364,10 @@ class PolicyEngine:
                     f'{effort_cap:g}.', 422)
 
         reasons = []
+        if self.policy.force:
+            reasons.append('force recovery: each request requires separate operator confirmation; at most 5 degrees existing overrun, hold or inward only')
+            if recovery is not None:
+                reasons.append(f'measured joints (deg): {current}; approved recovery envelope (deg): {recovery}')
         if self.policy.mode == 'always':
             reasons.append("approval mode 'always': every write requires operator approval")
         elif self.policy.mode == 'risk':
@@ -364,7 +391,8 @@ class PolicyEngine:
 
         return {'decision': 'ask' if reasons else 'allow',
                 'reasons': reasons,
-                'effective_limits': effective_limits}
+                'effective_limits': effective_limits,
+                'recovery_bounds_deg': recovery}
 
 
 def evaluate_operation(operation: str, changed_fields: list[str] | None = None) -> dict:

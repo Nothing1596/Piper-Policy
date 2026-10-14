@@ -19,6 +19,8 @@ from .console_bridge import MCPBridge
 
 INTERACTIVE_SLASH_COMMANDS = [
     ("/help", "Show available commands and usage guide"),
+    ("/observe", "Capture local real RGB-D: /observe [SERIAL]; no robot motion"),
+    ("/pixel", "Read recorded camera-frame depth: /pixel U V; not a motion target"),
     ("/status", "Show read-only robot and connection telemetry"),
     ("/connect", "Enumerate and connect to device on executor host"),
     ("/disconnect", "Release CAN connection on executor"),
@@ -26,7 +28,7 @@ INTERACTIVE_SLASH_COMMANDS = [
     ("/approve", "Approve a pending job: /approve <job_id>"),
     ("/deny", "Deny a pending job: /deny <job_id>"),
     ("/limits", "Show limits and open a guided editor; JSON is optional"),
-    ("/config", "Inspect managed configuration: /config [JSON]"),
+    ("/config", "Inspect config; /config force [on|off] for confirmed 5-degree recovery"),
     ("/confirm", "Confirm a pending configuration proposal: /confirm [code]"),
     ("/cancel", "Cancel a pending configuration proposal: /cancel [code]"),
     ("/remote", "List or add remote targets: /remote [add NAME SSH_HOST]"),
@@ -223,6 +225,26 @@ class InteractiveConsoleController(ConsoleController):
 
             if cmd == "/help":
                 self._cmd_help()
+                return True
+            if cmd in ("/observe", "/pixel"):
+                if self.mode != "real" or self.target != "local":
+                    self.emit("Camera commands currently support real/local only; no remote/local camera substitution.")
+                    return True
+                from . import console_camera
+                try:
+                    if cmd == "/observe":
+                        if len(rest.split()) > 1:
+                            raise ValueError("Usage: /observe [SERIAL]")
+                        self.emit("Capturing RGB-D; no robot motion...")
+                        result = await console_camera.observe(self.root, rest.strip() or None)
+                    else:
+                        fields = rest.split()
+                        if len(fields) != 2:
+                            raise ValueError("Usage: /pixel U V")
+                        result = await console_camera.pixel(self.root, *map(int, fields))
+                    self.emit(json.dumps(result, indent=2, ensure_ascii=False))
+                except Exception as exc:
+                    self.emit(f"Camera error: {exc}")
                 return True
             if cmd == "/approval":
                 await self._cmd_approval(rest)
@@ -572,7 +594,26 @@ class InteractiveConsoleController(ConsoleController):
         except Exception as exc:
             self.emit(f"Limits wizard cancelled or failed: {type(exc).__name__}")
 
+    async def _cmd_force(self, args: list[str]) -> None:
+        if args not in ([], ["on"], ["off"]):
+            self.emit("Usage: /config force [on|off]")
+            return
+        current = await self._read_interaction()
+        if current is None:
+            return
+        policy = dict(current["policy"])
+        if not args:
+            self.emit(f"Force recovery: {'on' if policy.get('force', False) else 'off'}; existing overrun <=5 degrees, hold or inward only. Every request requires /approve, including auto mode. Controller limits remain enforced.")
+            return
+        policy["force"] = args[0] == "on"
+        code = self._generate_proposal_code()
+        self._proposals[code] = Proposal(code, "policy", f"Force recovery {args[0]}", policy)
+        self.emit(f"Force recovery {args[0]}: <=5 degree existing overrun; hold or inward only. Each request needs /approve. Type /confirm {code} to apply or /cancel {code}.")
+
     async def _cmd_config(self, rest: str) -> None:
+        if rest.strip().split()[:1] == ["force"]:
+            await self._cmd_force(rest.strip().split()[1:])
+            return
         if self.managed is None or not hasattr(self.managed, "configure"):
             self.emit("Managed runtime not available for configuration.")
             return

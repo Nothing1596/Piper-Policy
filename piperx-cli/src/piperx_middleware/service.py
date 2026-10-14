@@ -263,8 +263,11 @@ class RobotService(InteractionControls, RuntimeControls):
                     raise DomainError('contact_completion_unavailable','Bilateral contact completion requires the MuJoCo force sensor adapter.',422)
                 if command.width_m>=state.gripper_width_m:
                     raise DomainError('contact_completion_requires_closing','Contact completion is valid only for a closing command.',422)
+            recovery = None
+            if self.policy.force:
+                recovery = self._evaluate_interaction(command, state).get("recovery_bounds_deg")
             if isinstance(command, JointMove):
-                if any(not low <= q <= high for q, (low, high) in zip(command.joints_deg, JOINT_LIMITS_DEG)):
+                if recovery is None and any(not low <= q <= high for q, (low, high) in zip(command.joints_deg, JOINT_LIMITS_DEG)):
                     raise DomainError("joint_limits", "Target exceeds PiperX joint limits.", 422)
                 if self.measured_limits and self.measured_limits.get("available") and self.measured_limits.get("connection_epoch") == self.epoch:
                     if any(not row["min_deg"] <= q <= row["max_deg"] for q, row in zip(command.joints_deg, self.measured_limits["joints"])):
@@ -279,7 +282,7 @@ class RobotService(InteractionControls, RuntimeControls):
                     raise DomainError("timeout_too_short", "Timeout is shorter than the bounded reference trajectory.", 422)
             elif isinstance(command, ControlMode):
                 self._check_window(state, command)
-                if any(not low <= q <= high for q, (low, high) in zip(state.q_deg, JOINT_LIMITS_DEG)):
+                if recovery is None and any(not low <= q <= high for q, (low, high) in zip(state.q_deg, JOINT_LIMITS_DEG)):
                     raise DomainError("joint_limits", "Measured pose cannot be preloaded outside joint limits.", 422)
             elif command.width_m > self.settings.gripper_max_m or (self.settings.control_profile == "calibration" and command.effort_protocol > self.settings.gripper_effort_limit):
                 raise DomainError("gripper_limits", "Requested width or protocol effort exceeds configured bounds.", 422)
@@ -294,6 +297,8 @@ class RobotService(InteractionControls, RuntimeControls):
                     "deadline": now + self.settings.plan_ttl_s, "consumed": False,
                     "stop_generation": generation,
                     "checks": "Bounds and fresh state only; no scene collision or grasp feasibility check."}
+            if recovery is not None:
+                plan["recovery_bounds_deg"] = recovery
             self.plans[ident] = plan
             self.store.event("plan_created", plan_id=ident, command=plan["command"], start_deg=plan["start_deg"])
             return {k: copy.deepcopy(v) for k, v in plan.items() if k != "deadline"}
@@ -367,6 +372,8 @@ class RobotService(InteractionControls, RuntimeControls):
         from .primitives import resolve_primitive
         with self.lock:
             self._require_open()
+            if self.policy.force and command.kind != "set_gripper":
+                raise DomainError("recovery_joint_only", "Force recovery supports explicit joint targets and control-mode switching; turn force off for Cartesian primitives.", 422)
             original = command.model_dump()
             if self.active:
                 raise DomainError("busy", "Exactly one action may execute at a time.")
@@ -421,11 +428,19 @@ class RobotService(InteractionControls, RuntimeControls):
             exc.rejected_state = state.public()
             raise
         self._check_window(state, command)
+        from .recovery_limits import worker_bounds, check_bounds
+        if worker_bounds() is not None:
+            check_bounds(state.q_deg, worker_bounds(), "recovery_limit")
         # snapshot() may block while stop arrives or the deadline expires.
         self._check_cancel_deadline(deadline)
         return state
 
     def _run(self, job, command, plan):
+        from .recovery_limits import recovery_scope
+        with recovery_scope(plan.get("recovery_bounds_deg")):
+            self._run_motion(job, command, plan)
+
+    def _run_motion(self, job, command, plan):
         deadline = time.monotonic() + command.timeout_s
         last_write_at, last_settled_stamp = time.monotonic(), None
         last_settled_q = None

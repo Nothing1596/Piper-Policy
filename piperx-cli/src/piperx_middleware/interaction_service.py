@@ -37,7 +37,7 @@ class InteractionControls:
 
     @property
     def interaction_required(self):
-        return self.backend.name == 'agx' or self.settings.managed_control
+        return self.backend.name == 'agx' or self.settings.managed_control or self.policy.force
 
     def _require_session(self):
         if self.interaction_required:
