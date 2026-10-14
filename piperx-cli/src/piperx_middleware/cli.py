@@ -10,7 +10,7 @@ import time
 
 from . import cli_views
 from .client import RobotClient
-from .models import Settings
+from .models import Settings, DomainError
 
 
 def default_root():
@@ -165,6 +165,9 @@ def main():
                         "(env PIPERX_URL; default: local config, else http://127.0.0.1:8765)")
     parser.add_argument("--token-file", type=Path, help="Bearer token file for the console and inspection commands "
                         "(env PIPERX_TOKEN_FILE; default: <root>/model.token)")
+    parser.add_argument("--mode", choices=["simulation", "real"], help="Explicit startup mode; required without a TTY")
+    parser.add_argument("--target", default="local", help="Local executor or saved SSH target")
+    parser.add_argument("--simulation-backend", choices=["sim", "mujoco"], default="mujoco")
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("shell", help="Interactive robot console (also the default with no command)")
     init = sub.add_parser("init")
@@ -180,6 +183,7 @@ def main():
     init.add_argument("--read-only", action="store_true")
     serve = sub.add_parser("serve")
     serve.add_argument("--config", type=Path)
+    serve.add_argument("--managed", action="store_true", help="Private lifecycle-managed executor with automatic port")
     mode = serve.add_mutually_exclusive_group()
     mode.add_argument("--allow-motion", action="store_true", help="Enable configured action tools")
     mode.add_argument("--read-only", action="store_true", help="Run observations only")
@@ -226,11 +230,17 @@ def main():
         return
     if args.command in (None, "shell"):
         import asyncio
-        from .console import run_console
+        from .managed_console import run_managed_console
         try:
-            asyncio.run(run_console(args, root))
+            asyncio.run(run_managed_console(args, root))
         except KeyboardInterrupt:
             pass
+        except DomainError as exc:
+            print(f"{exc.code}: {exc.message}", file=sys.stderr)
+            raise SystemExit(1) from None
+        except (OSError, ValueError, RuntimeError) as exc:
+            print(f"Cannot start the selected profile: {exc}", file=sys.stderr)
+            raise SystemExit(1) from None
         return
     if args.command == "init":
         overrides = {key: getattr(args, key) for key in ("can_interface", "can_channel", "sdk_root", "cando_source", "tcp_offset_m", "tcp_offset_rpy_deg")
@@ -253,8 +263,14 @@ def main():
         from .service import RobotService
         lock = ProcessLock(settings.data_dir / "executor.lock")
         service = backend = None
+        listener = None
+        runtime_path = root / "runtime.json"
         pid_path = root / "executor.pid"
         try:
+            if args.managed:
+                settings.managed_control = True
+                settings.host = "127.0.0.1"
+                settings.port = 0
             if args.allow_motion:
                 settings.allow_motion = True
             if args.read_only:
@@ -282,7 +298,21 @@ def main():
             temporary_pid = root / f"executor-{os.getpid()}.pid.tmp"
             temporary_pid.write_text(str(os.getpid()), encoding="ascii")
             temporary_pid.replace(pid_path)
-            server.run()
+            if args.managed:
+                import socket
+                listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                listener.bind(("127.0.0.1", 0))
+                listener.listen(128)
+                record = {"url": f"http://127.0.0.1:{listener.getsockname()[1]}",
+                          "instance_id": service.instance_id, "profile_id": settings.managed_profile_id,
+                          "mode": "real" if settings.backend == "agx" else "simulation",
+                          "pid": os.getpid(), "backend": settings.backend}
+                temporary = runtime_path.with_suffix(".tmp")
+                temporary.write_text(json.dumps(record), encoding="utf-8")
+                temporary.replace(runtime_path)
+                server.run(sockets=[listener])
+            else:
+                server.run()
         finally:
             # A failed cleanup must propagate; do not advertise a released lock.
             if service is not None:
@@ -291,6 +321,14 @@ def main():
                 backend.close()
             if pid_path.exists() and pid_path.read_text().strip() == str(os.getpid()):
                 pid_path.unlink()
+            if listener is not None:
+                listener.close()
+            if runtime_path.exists() and service is not None:
+                try:
+                    if json.loads(runtime_path.read_text()).get("instance_id") == service.instance_id:
+                        runtime_path.unlink()
+                except (OSError, ValueError):
+                    pass
             lock.close()
         return
 

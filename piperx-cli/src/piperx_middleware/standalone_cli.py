@@ -8,6 +8,12 @@ import sys
 
 def main(argv=None):
     args = list(sys.argv[1:] if argv is None else argv)
+    if args and args[0] == 'host':
+        from .ssh_runtime import host_main
+        parser = argparse.ArgumentParser(prog='piper-robot host')
+        parser.add_argument('--stdio', action='store_true', required=True)
+        parser.parse_args(args[1:])
+        return host_main()
     if args and args[0] == 'mcp':
         from .mcp_server import main as serve
         return serve(args[1:])
@@ -43,7 +49,7 @@ def main(argv=None):
         finally:
             client.close()
         return 0
-    if not args or args[0] in ('--help', '-h'):
+    if args and args[0] in ('--help', '-h'):
         print('piper-robot: sim start | observe | mcp | [--root DIR] <executor command>\n'
               'Use sim --help, observe --help, mcp --help, or the executor help below.')
         args = ['--help']

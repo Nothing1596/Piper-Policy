@@ -11,6 +11,10 @@ install/
 log/
 downloads/
 vendor/
+!piperx-cli/src/piperx_middleware/vendor/
+!piperx-cli/src/piperx_middleware/vendor/**
+piperx-cli/src/piperx_middleware/vendor/**/__pycache__/
+piperx-cli/src/piperx_middleware/vendor/**/*.pyc
 .env
 .env.*
 !.env.example
@@ -24,3 +28,5 @@ vendor/
 *.whl
 *.zip
 *.log
+
+MUJOCO_LOG.TXT

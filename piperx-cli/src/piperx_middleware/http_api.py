@@ -13,6 +13,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .models import ControlMode, ControlModeRequest, DomainError, ExecuteRequest, LeaseRequest, MoveRequest, PreviewRequest, PrimitiveRequest, ShutdownRequest
 from .service import RobotService
+from .request_context import control_session_id
+from .interaction_types import SessionAcquire, SessionReference, ApprovalDecision, PolicyUpdate, ProfileSettingsUpdate
 from .models import PrimitivePreviewRequest, RuntimeParameters, SimFault
 from .piper_aio import AioAction, describe
 from .mcp_server import ConnectOptions, ServiceClient, create_mcp
@@ -55,9 +57,10 @@ def create_app(service: RobotService, model_token: str, operator_token: str, on_
                 camera_pool.shutdown(wait=True, cancel_futures=True)
             await anyio.to_thread.run_sync(service.close)
 
-    app = FastAPI(title="PiperX middleware", version="0.5.0", lifespan=lifespan,
+    app = FastAPI(title="PiperX middleware", version="0.7.0", lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.state.mcp = mcp
+    service.on_idle_session_loss = on_shutdown
     app.add_middleware(TrustedHostMiddleware,
                        allowed_hosts=["localhost", "127.0.0.1", "[::1]", service.settings.host, "testserver"]
                        )
@@ -152,6 +155,14 @@ def create_app(service: RobotService, model_token: str, operator_token: str, on_
         return response
 
     @app.middleware("http")
+    async def control_session_context(request: Request, call_next):
+        token = control_session_id.set(request.headers.get("x-piper-control-session"))
+        try:
+            return await call_next(request)
+        finally:
+            control_session_id.reset(token)
+
+    @app.middleware("http")
     async def reject_browser_origins(request: Request, call_next):
         # This API is for tool clients. No browser-origin requests or permissive CORS.
         if "origin" in request.headers:
@@ -181,7 +192,10 @@ def create_app(service: RobotService, model_token: str, operator_token: str, on_
     def health():
         cap = service.capabilities()
         return {"service": "piperx-middleware", "api_version": "1",
-                "process_id": cap["process_id"], "instance_id": service.instance_id}
+                "process_id": cap["process_id"], "instance_id": service.instance_id,
+                "profile_id": service.settings.managed_profile_id,
+                "backend": service.backend.name,
+                "mode": "real" if service.backend.name == "agx" else "simulation"}
 
     @app.post("/v1/shutdown", dependencies=auth)
     def shutdown(req: ShutdownRequest, background_tasks: BackgroundTasks):
@@ -277,6 +291,39 @@ def create_app(service: RobotService, model_token: str, operator_token: str, on_
     def limits():
         return service.limits()
 
+    @app.post("/operator/session", dependencies=[Depends(operator_auth)])
+    def acquire_session(req: SessionAcquire):
+        return service.acquire_session(req.owner, req.shutdown_on_loss)
+
+    @app.post("/operator/session/heartbeat", dependencies=[Depends(operator_auth)])
+    def heartbeat_session(req: SessionReference):
+        return service.heartbeat_session(req.session_id)
+
+    @app.post("/operator/session/release", dependencies=[Depends(operator_auth)])
+    def release_session(req: SessionReference):
+        return service.release_session(req.session_id)
+
+    @app.get("/operator/interaction", dependencies=[Depends(operator_auth)])
+    def interaction():
+        return service.interaction_state()
+
+    @app.put("/operator/interaction", dependencies=[Depends(operator_auth)])
+    def configure_interaction(req: PolicyUpdate):
+        return service.configure_interaction(req.policy)
+
+    @app.post("/operator/approvals/{job_id}", dependencies=[Depends(operator_auth)])
+    def decide_approval(job_id: str, req: ApprovalDecision):
+        return service.decide_approval(job_id, req.approved)
+
+    @app.get("/operator/settings", dependencies=[Depends(operator_auth)])
+    def profile_settings():
+        return {"configured": service.settings.model_dump(mode="json"),
+                "parameter_version": service.parameter_version}
+
+    @app.patch("/operator/settings", dependencies=[Depends(operator_auth)])
+    def configure_profile(req: ProfileSettingsUpdate):
+        return service.configure_profile(req.changes)
+
     @app.post("/operator/query-limits", dependencies=[Depends(operator_auth)])
     def query_limits():
         return service.limits(refresh=True)
@@ -321,7 +368,7 @@ def create_app(service: RobotService, model_token: str, operator_token: str, on_
     def stop():
         return service.stop()
 
-    @app.post("/operator/control-window", dependencies=[Depends(operator_auth)])
+    @app.post("/operator/control-window", dependencies=[Depends(operator_auth)], deprecated=True)
     def arm(req: LeaseRequest):
         return service.arm_window(req)
 

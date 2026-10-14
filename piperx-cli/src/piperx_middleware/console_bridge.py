@@ -38,6 +38,7 @@ class MCPBridge:
         except ValueError as exc:
             raise ValueError("Malformed port in URL") from exc
 
+        self.session_id: str | None = None
         self.url = url.rstrip("/")
         self.token_file = Path(token_file)
         self._token = ""
@@ -74,6 +75,8 @@ class MCPBridge:
     async def _run_mcp_loop(self) -> None:
         try:
             headers = {"Authorization": f"Bearer {self._token}"}
+            if self.session_id:
+                headers["X-Piper-Control-Session"] = self.session_id
             mcp_url = f"{self.url}/mcp"
             async with httpx.AsyncClient(
                 base_url=self.url,
@@ -233,7 +236,7 @@ class MCPBridge:
                 return {"error": {"code": "missing_token", "message": "Executor token unavailable."}}
             self._rest_client = httpx.AsyncClient(
                 base_url=self.url,
-                headers={"Authorization": f"Bearer {self._token}"},
+                headers={"Authorization": f"Bearer {self._token}", **({"X-Piper-Control-Session": self.session_id} if self.session_id else {})},
                 timeout=httpx.Timeout(10.0, connect=3.0),
                 trust_env=False,
                 follow_redirects=False,
