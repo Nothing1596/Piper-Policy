@@ -22,9 +22,10 @@ class RuntimeControls:
     def _supervise(self):
         # Does not acquire service.lock: a model request or IK cannot stall supervision.
         while not self._supervisor_exit.wait(0.05):
-            if self.estop_latched or self.closed:
-                continue
             try:
+                self._expire_control()
+                if self.estop_latched or self.closed:
+                    continue
                 sample = self.backend.snapshot()
                 if sample.connected and sample.collision_status and any(sample.collision_status):
                     self.emergency_stop("collision_feedback")
@@ -112,6 +113,7 @@ class RuntimeControls:
             raise DomainError("invalid_request", "No runtime parameter specified.", 422)
         with self.lock:
             self._require_open()
+            self._require_session()
             if self.active:
                 raise DomainError("busy", "Runtime parameters require an idle executor.")
             if not self.settings.allow_motion:
@@ -133,6 +135,7 @@ class RuntimeControls:
                     setattr(self.settings, name, values[name])
             if hardware and self.backend.name == "sim":
                 self.backend.runtime_parameters.update(hardware)
+            self._cancel_pending("parameters_changed")
             self.parameter_version += 1
             self.measured_limits = None
             self.plans.clear()
