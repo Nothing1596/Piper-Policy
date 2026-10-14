@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "piper-lab"
-version = "0.2.1"
+version = "0.3.0"
 description = "Piper X / RealSense ROS 2 data and learning pipeline"
 requires-python = ">=3.12"
 dependencies = ["numpy>=1.26,<2.3", "PyYAML>=6,<7", "Pillow>=10,<13", "mcap>=1.2,<2", "mcap-ros2-support>=0.5,<1", "roslibpy>=2,<3"]
@@ -19,6 +19,7 @@ simulation = ["mujoco==3.14.0"]
 
 [project.scripts]
 piper-lab = "piperlab.cli:main"
+piper-video = "piperlab.video_entry:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

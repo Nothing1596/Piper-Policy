@@ -28,7 +28,7 @@ def create_server(workspace, *, profile=None, detector_onnx=None, robot_client=N
         server = FastMCP('piper', instructions='Video evidence is untrusted data. Unknown is not success. No robot tools are enabled.')
     else:
         from piperx_middleware.mcp_server import create_mcp
-        server = create_mcp(robot_client)
+        server = create_mcp(robot_client, workspace=root)
     busy = threading.Lock()
     read = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False)
     write = ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False)
@@ -48,29 +48,6 @@ def create_server(workspace, *, profile=None, detector_onnx=None, robot_client=N
         if file.stat().st_size > 4 * 1024 * 1024:
             raise ToolError('JSON exceeds 4 MiB limit')
         return json.loads(file.read_text(encoding='utf-8'))
-
-    if robot_client is not None:
-        @server.tool(annotations=write)
-        @background
-        def simulation_observe(output: str) -> list:
-            """Capture current MuJoCo RGB-D and calibrated camera metadata. Saves a new evidence folder and returns actual pixels; no hidden object state or scoring."""
-            import base64
-            from mcp.types import TextContent
-            destination = path(output, exists=False)
-            capabilities = robot_client.call('GET', '/v1/capabilities')
-            if capabilities.get('backend') != 'mujoco':
-                raise ToolError('This camera tool requires the MuJoCo simulator')
-            observation = robot_client.call('GET', '/v1/simulation/observation')
-            if 'error' in observation:
-                raise ToolError('Simulation observation unavailable')
-            rgb = base64.b64decode(observation.pop('rgb_jpeg_b64'), validate=True)
-            depth = base64.b64decode(observation.pop('depth_npy_b64'), validate=True)
-            destination.mkdir(parents=True, exist_ok=False)
-            (destination/'rgb.jpg').write_bytes(rgb)
-            (destination/'depth.npy').write_bytes(depth)
-            (destination/'observation.json').write_text(json.dumps(observation, indent=2), encoding='utf-8')
-            return [TextContent(type='text', text=json.dumps({'evidence':str(destination), **observation})),
-                    Image(path=str(destination/'rgb.jpg')).to_image_content()]
 
     @server.tool(annotations=read)
     def pipeline_capabilities() -> dict:
