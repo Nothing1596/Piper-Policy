@@ -21,6 +21,75 @@ def _command_defaults(command):
     return command
 
 
+# --- Bounded recovery from a confirmed blocked motion (MuJoCo, direct profile) -
+# A timed-out or stalled ordinary motion may be re-expressed as
+# failed/motion_blocked/recoverable only after the servo reference has been
+# replaced by the measured pose and fresh feedback has confirmed standstill on
+# the same connection. These are fixed internal limits, not operator, model or
+# configuration knobs. The whole confirmation stays inside the client's 5 s
+# post-timeout polling grace.
+_RECOVERY_HOLD_SAMPLE_INTERVAL_S = 0.05
+_RECOVERY_HOLD_MAX_S = 2.5
+_RECOVERY_HOLD_MIN_SAMPLES = 3
+_RECOVERY_HOLD_MIN_SPAN_S = 0.25
+_RECOVERY_HOLD_MAX_VELOCITY_DEG_S = 0.5
+_RECOVERY_HOLD_MAX_JOINT_DELTA_DEG = 0.05
+_RECOVERY_HOLD_MAX_WIDTH_DELTA_M = 0.0005
+
+# Sustained measured-progress watchdog. A motion is declared stalled only when
+# the measured joint vector (or gripper width) does not change by more than
+# epsilon over a full window, so slow but genuinely progressing motion keeps
+# running. The watchdog deliberately watches measured displacement instead of
+# the scalar distance to the final commanded target: a legal curved
+# Cartesian/IK path can hold one axis's final-target error flat (or make it
+# grow) while other joints move.
+_STALL_WARMUP_S = 0.4
+_STALL_WINDOW_S = 1.2
+_STALL_MIN_PROGRESS_DEG = 0.02
+_STALL_MIN_PROGRESS_M = 0.0002
+
+# Original failures that may become motion_blocked after a confirmed hold.
+# Anything else (faults, stale feedback, limits, collisions, cancellation,
+# control-mode changes) keeps its existing unknown/cancellation handling.
+_BLOCKED_RECOVERY_CODES = ("execution_timeout", "motion_stalled")
+
+
+class _ProgressWatch:
+    """Worker-local watchdog over measured joint/width displacement.
+
+    Samples the measured feedback vector, not the scalar error to the final
+    commanded joints. A curved Cartesian/IK path (or a stationary axis whose
+    final-target error stays largest) must not be called stalled while the
+    measured joints keep changing; only a full window with no displacement
+    beyond epsilon -- including a reference permanently paused in the existing
+    .12-.3 tracking guard band -- is blocked.
+    """
+
+    __slots__ = ("started_at", "samples")
+
+    def __init__(self, started_at: float):
+        self.started_at = started_at
+        self.samples: list[tuple[float, tuple[float, ...]]] = []
+
+    def stalled(self, now: float, measured, epsilon: float) -> bool:
+        self.samples.append((now, tuple(float(v) for v in measured)))
+        cutoff = now - 2 * _STALL_WINDOW_S
+        while len(self.samples) > 2 and self.samples[0][0] < cutoff:
+            self.samples.pop(0)
+        if now - self.started_at < _STALL_WARMUP_S:
+            return False
+        baseline = None
+        for sampled_at, values in self.samples:
+            if sampled_at <= now - _STALL_WINDOW_S:
+                baseline = values
+            else:
+                break
+        if baseline is None:
+            return False
+        return max(abs(value - base) for _, values in self.samples
+                   for value, base in zip(values, baseline)) < epsilon
+
+
 class RobotService(InteractionControls, RuntimeControls):
     """One serialized action owner, shared by HTTP and every MCP client."""
     def __init__(self, backend: Backend, settings: Settings):
@@ -450,9 +519,16 @@ class RobotService(InteractionControls, RuntimeControls):
         waypoints = plan.get("resolution", {}).get("waypoints_deg", [])
         native_linear = plan.get("resolution", {}).get("native_controller", False)
         waypoint_index = 0
+        # Only the MuJoCo direct-profile motions this recovery covers get the
+        # measured-progress watchdog; real CAN/calibration/control-mode paths
+        # keep their existing deadline-only behaviour.
+        track_progress = self._ordinary_recovery_command(command) and not native_linear
+        progress_watch = _ProgressWatch(time.monotonic())
+        motion_identity = None
         try:
             with self.lock:
                 state = self._guard_running(command, deadline)
+                motion_identity = self._connection_identity(state)
                 job["status"] = "running"
                 self.store.put(job)
                 job["command_attempted"] = True
@@ -503,10 +579,17 @@ class RobotService(InteractionControls, RuntimeControls):
                         target = waypoints[waypoint_index]
                         self._check_window(state, JointMove(joints_deg=target, speed_percent=command.speed_percent,
                                                             timeout_s=command.timeout_s))
-                        if max(abs(a-b) for a, b in zip(state.q_deg, current)) > 0.3:
+                        tracking = max(abs(a-b) for a, b in zip(state.q_deg, current))
+                        if tracking > 0.3:
                             raise DomainError("tracking_error", "Linear reference is not being tracked.")
                         step = self.settings.reference_deg_s * 0.05 if calibration else 0.1
-                        next_q = [q + max(-step, min(step, t-q)) for q, t in zip(current, target)]
+                        # Wait for measured tracking before advancing the
+                        # sampled reference. Repeatedly advancing while a
+                        # speed/acceleration-limited servo catches up can
+                        # manufacture a tracking fault on a clear path. Keep
+                        # the existing 0.3 degree rejection and deadline.
+                        next_q = ([q + max(-step, min(step, t-q)) for q, t in zip(current, target)]
+                                  if tracking <= .12 else current)
                         self._check_cancel_deadline(deadline)
                         self.backend.joint_target(next_q)
                         last_write_at = time.monotonic()
@@ -549,6 +632,22 @@ class RobotService(InteractionControls, RuntimeControls):
                             last_write_at = time.monotonic()
                         width = next_width
                         reached = abs(width - command.width_m) < 1e-8 and abs(state.gripper_width_m - command.width_m) < 0.001
+                    if track_progress and not reached:
+                        # Watch the measured feedback vector, not the scalar
+                        # error to the final commanded joints: a curved path can
+                        # keep one axis's final-target error flat while other
+                        # joints move, and that is still real progress.
+                        if isinstance(command, JointMove):
+                            measured = tuple(state.q_deg)
+                            epsilon = _STALL_MIN_PROGRESS_DEG
+                        else:
+                            measured = (state.gripper_width_m,)
+                            epsilon = _STALL_MIN_PROGRESS_M
+                        if progress_watch.stalled(time.monotonic(), measured, epsilon):
+                            raise DomainError(
+                                "motion_stalled",
+                                "Measured motion stopped progressing toward the target while the target was "
+                                "not reached; the command is blocked at the measured pose.", 409)
                     stamp = state.feedback_stamp_s
                     if isinstance(command, GripperMove):
                         stamp = min(stamp, state.gripper_stamp_s) if stamp is not None and state.gripper_stamp_s is not None else None
@@ -576,9 +675,21 @@ class RobotService(InteractionControls, RuntimeControls):
             with self.lock:
                 self.lease = None
                 hold = self._hold(command) if job["command_attempted"] else {"status": "not_needed"}
-                job.update(status="cancelled" if isinstance(exc, DomainError) and exc.code == "cancelled" and hold["status"] in ("hold_requested", "not_needed") else
-                           "outcome_unknown" if job["command_attempted"] else "failed",
-                           error=str(exc), error_code=getattr(exc, "code", "execution_error"), stop_result=hold)
+                error_code = getattr(exc, "code", "execution_error")
+                recovery = None
+                if (job["command_attempted"] and motion_identity is not None
+                        and error_code in _BLOCKED_RECOVERY_CODES
+                        and self._ordinary_recovery_command(command)):
+                    recovery = self._blocked_motion_recovery(job, command, motion_identity, hold, error_code, exc)
+                if recovery is not None:
+                    # Failed and recoverable, never a success claim.
+                    job.update(status="failed", error_code="motion_blocked", recoverable=True,
+                               original_error_code=error_code, error=str(exc),
+                               stop_result=recovery["stop_result"], after=recovery["after"])
+                else:
+                    job.update(status="cancelled" if isinstance(exc, DomainError) and error_code == "cancelled" and hold["status"] in ("hold_requested", "not_needed") else
+                               "outcome_unknown" if job["command_attempted"] else "failed",
+                               error=str(exc), error_code=error_code, stop_result=hold)
                 if hasattr(exc, "rejected_state"):
                     job["rejected_state"] = exc.rejected_state
         finally:
@@ -614,11 +725,187 @@ class RobotService(InteractionControls, RuntimeControls):
                 self.backend.joint_target(state.q_deg)
                 if isinstance(command, GripperMove):
                     self.backend.gripper_target(state.gripper_width_m, command.effort_protocol)
+            # Monotonic instant immediately after the position-hold write. Only
+            # feedback source stamps strictly later than this are accepted as
+            # post-hold stop evidence, so cached pre-hold frames never count.
+            hold_requested_at = time.monotonic()
             return {"status": "hold_requested", "confirmed_stopped": False, "audit_error": audit_error,
+                    "hold_requested_monotonic_s": hold_requested_at,
                     "message": "Fresh measured position requested; verify physical standstill. This is not a hardware emergency stop."}
         except Exception as exc:
             return {"status": "outcome_unknown", "confirmed_stopped": False,
                     "message": "Cannot confirm stop; use the on-site power/emergency control.", "error": str(exc)}
+
+    def _ordinary_recovery_command(self, command) -> bool:
+        """True only for the MuJoCo direct-profile motions this recovery covers.
+
+        Ordinary joint moves and ordinary/contact gripper completions. A contact
+        completion that never reports contact (an empty/missed closing) or stops
+        making progress is still only ever re-expressed as failed/recoverable
+        after a confirmed post-hold stop; it is never a success. Calibration,
+        control-mode transitions and native controller lines keep their existing
+        outcome handling.
+        """
+        if self.backend.name != "mujoco" or self.settings.control_profile != "direct":
+            return False
+        if isinstance(command, JointMove):
+            return True
+        return isinstance(command, GripperMove) and command.completion in ("width", "bilateral_contact")
+
+    def _connection_identity(self, state):
+        diagnostics = getattr(state, "diagnostics", None)
+        return (self.instance_id, self.epoch,
+                diagnostics.get("epoch") if isinstance(diagnostics, dict) else None)
+
+    def _identity_unchanged(self, identity, state) -> bool:
+        return self._connection_identity(state) == identity
+
+    def _hold_evidence_stamp(self, command, state):
+        """Older of the source timestamps required for post-hold stop evidence.
+
+        A gripper move additionally binds the gripper source timestamp, so a
+        frozen or cached gripper frame cannot ride on fresh arm feedback.
+        """
+        stamp = state.feedback_stamp_s
+        if isinstance(command, GripperMove):
+            if stamp is None or state.gripper_stamp_s is None:
+                return None
+            stamp = min(stamp, state.gripper_stamp_s)
+        return stamp
+
+    def _contact_evidence_stale(self, command, state) -> bool:
+        """True when a contact completion carries unusable required contact feedback.
+
+        A missing/empty contact diagnostic means no contact was reported (an
+        empty/missed closing): that never supports success, but by itself it
+        does not forbid a recovery either. A present contact reading whose
+        source stamp is missing, non-finite, in the future or older than the
+        feedback timeout is stale required feedback and must keep the outcome
+        unknown instead of underwriting a stop claim.
+        """
+        if not (isinstance(command, GripperMove) and command.completion == "bilateral_contact"):
+            return False
+        diagnostics = getattr(state, "diagnostics", None)
+        contact = diagnostics.get("gripper_contact") if isinstance(diagnostics, dict) else None
+        if not isinstance(contact, dict) or not contact:
+            return False
+        stamp = contact.get("source_timestamp_s")
+        if stamp is None or not isinstance(stamp, (int, float)) or not math.isfinite(stamp):
+            return True
+        age = time.monotonic() - stamp
+        return age < 0 or age > self.settings.feedback_timeout_s
+
+    def _confirm_measured_hold(self, command, identity, hold):
+        """Confirm standstill from fresh samples stamped after the hold write.
+
+        Returns (evidence, None) only when the hold was journalled and at least
+        three feedback samples whose source timestamps strictly advance after
+        the position-hold write, over a settled interval, show low measured
+        velocity and low measured joint/width change on the same connection.
+        The sample that completes that window is never accepted on its own: one
+        more read must arrive, be a strictly advancing post-hold required stamp
+        and stay inside the same velocity/joint/width bounds, and that actual
+        latest public sample is what gets returned. A last read that is still
+        moving resets the settled window, and a stale/replayed last read is
+        skipped, so neither can certify standstill; verification stays bounded
+        by the hold deadline. Cached pre-hold frames and out-of-order frames are
+        never counted as new stop evidence. Otherwise returns (None, reason): an
+        unconfirmed hold is never recoverable.
+        """
+        if hold.get("status") != "hold_requested":
+            return None, "measured position hold was not requested"
+        if hold.get("audit_error"):
+            return None, "hold request could not be journalled; not recoverable"
+        hold_requested_at = hold.get("hold_requested_monotonic_s")
+        if hold_requested_at is None or not math.isfinite(hold_requested_at):
+            return None, "hold request time is unavailable; not recoverable"
+        deadline = time.monotonic() + _RECOVERY_HOLD_MAX_S
+        samples, reference_q, reference_width = [], None, None
+        last_stamp = None
+        # Set once the settled window is complete; the next fresh in-bounds read
+        # is the one that certifies standstill and is returned as `after`.
+        window_ready = False
+        gripper = isinstance(command, GripperMove)
+        reason = "no fresh advancing feedback after the hold write arrived while the hold was active"
+        while time.monotonic() < deadline:
+            if self.cancel.is_set():
+                return None, "stop requested while confirming the hold; not recoverable"
+            state = self.backend.snapshot()
+            if not self._identity_unchanged(identity, state):
+                return None, "connection identity changed while confirming the hold"
+            try:
+                self._check(state, gripper=gripper, moving=True, require_position_mode=True)
+            except DomainError as exc:
+                return None, f"cannot confirm standstill ({exc.code})"
+            if self._contact_evidence_stale(command, state):
+                # Required contact feedback is unusable: fail closed now instead
+                # of waiting out the hold deadline on a broken channel.
+                return None, "required gripper contact feedback is stale or invalid; not recoverable"
+            stamp = self._hold_evidence_stamp(command, state)
+            # Only strictly advancing timestamps produced after the hold write
+            # are new stop evidence: equal, cached pre-hold and out-of-order
+            # stamps are skipped without resetting the settled window.
+            if (stamp is None or not math.isfinite(stamp) or stamp <= hold_requested_at
+                    or (last_stamp is not None and stamp <= last_stamp)):
+                time.sleep(_RECOVERY_HOLD_SAMPLE_INTERVAL_S)  # wait for a fresh frame
+                continue
+            last_stamp = stamp
+            velocity = max((abs(v) for v in state.velocity_deg_s if math.isfinite(v)), default=math.inf)
+            if reference_q is None:
+                reference_q, reference_width = state.q_deg.copy(), state.gripper_width_m
+            if (velocity > _RECOVERY_HOLD_MAX_VELOCITY_DEG_S
+                    or max(abs(a - b) for a, b in zip(state.q_deg, reference_q)) > _RECOVERY_HOLD_MAX_JOINT_DELTA_DEG
+                    or abs(state.gripper_width_m - reference_width) > _RECOVERY_HOLD_MAX_WIDTH_DELTA_M):
+                # Still moving on a fresh post-hold read: this read cannot
+                # certify a stop, so the settled window restarts at it.
+                samples, reference_q, reference_width = [], state.q_deg.copy(), state.gripper_width_m
+                window_ready = False
+                reason = "measured motion did not settle during the hold"
+                time.sleep(_RECOVERY_HOLD_SAMPLE_INTERVAL_S)
+                continue
+            samples.append({"stamp": stamp, "q_deg": state.q_deg.copy(),
+                            "gripper_width_m": state.gripper_width_m, "max_velocity_deg_s": velocity})
+            span = samples[-1]["stamp"] - samples[0]["stamp"]
+            if not window_ready:
+                window_ready = len(samples) >= _RECOVERY_HOLD_MIN_SAMPLES and span >= _RECOVERY_HOLD_MIN_SPAN_S
+                time.sleep(_RECOVERY_HOLD_SAMPLE_INTERVAL_S)
+                continue
+            # Fresh, advancing and inside every bound: this read is the latest
+            # public sample and the one the recovery is certified on.
+            confirmation = {
+                "method": "bounded measured position hold; fresh advancing measured samples",
+                "samples": len(samples), "settled_span_s": round(span, 4),
+                "max_velocity_deg_s": round(max(s["max_velocity_deg_s"] for s in samples), 4),
+                "max_joint_delta_deg": round(max(max(abs(a - b) for a, b in zip(s["q_deg"], reference_q)) for s in samples), 4),
+                "max_width_delta_m": round(max(abs(s["gripper_width_m"] - reference_width) for s in samples), 6)}
+            return {"stop_result": dict(hold, confirmed_stopped=True, confirmation=confirmation),
+                    "after": state.public()}, None
+        return None, reason
+
+    def _blocked_motion_recovery(self, job, command, identity, hold, original_code, exc):
+        """Re-express one confirmed blocked MuJoCo motion as failed/recoverable."""
+        try:
+            evidence, reason = self._confirm_measured_hold(command, identity, hold)
+        except Exception as err:
+            # An unexpected confirmation failure is an unconfirmed stop, never
+            # a recoverable claim; the job keeps its existing unknown outcome.
+            hold["stop_confirmation"] = {"confirmed_stopped": False,
+                                         "reason": f"hold confirmation failed ({type(err).__name__})"}
+            return None
+        if evidence is None:
+            hold["stop_confirmation"] = {"confirmed_stopped": False, "reason": reason}
+            return None
+        confirmation = evidence["stop_result"]["confirmation"]
+        try:
+            self.store.event("motion_blocked_recovery", job_id=job["job_id"], error_code=original_code,
+                             reason=str(exc), samples=confirmation["samples"],
+                             settled_span_s=confirmation["settled_span_s"])
+        except Exception as err:
+            # Failure to persist the recovery claim is not recoverable.
+            hold["stop_confirmation"] = {"confirmed_stopped": False,
+                                         "reason": f"recovery audit write failed ({type(err).__name__})"}
+            return None
+        return evidence
 
     def stop(self):
         with self.cancel_lock:

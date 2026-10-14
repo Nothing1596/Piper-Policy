@@ -214,8 +214,12 @@ def test_camera_rendering_rgb_and_depth(backend):
 
     assert depth.shape == (240, 320)
     assert depth.dtype == np.float32
-    assert depth.min() > 0.3
-    assert depth.max() < 3.0
+    # Robot-covered pixels are unavailable; measured object/table pixels retain
+    # their metric depth. Native rendering must actually apply the self-mask.
+    assert obs["depth_filter"]["applied"] is True
+    assert np.isnan(depth).sum() == obs["depth_filter"]["filtered_pixels"] > 0
+    assert np.nanmin(depth) > 0.3
+    assert np.nanmax(depth) < 3.0
 
     cam_info = obs["camera_info"]
     assert "intrinsics" in cam_info
@@ -231,6 +235,28 @@ def test_camera_rendering_rgb_and_depth(backend):
     R = base_from_cam[:3, :3]
     assert np.allclose(R.T @ R, np.eye(3), atol=1e-5)
     assert np.isclose(np.linalg.det(R), 1.0, atol=1e-5)
+
+
+def test_wrist_camera_rendering_and_flange_extrinsics(backend):
+    """Verify wrist_camera renders gripper/workspace, masks gripper depth, and matches PiperKinematics flange FK."""
+    obs = backend.observe(width=320, height=240, camera="wrist_camera")
+    assert obs["camera_name"] == "wrist_camera"
+    assert obs["camera_serial"] == "mujoco-wrist"
+    assert obs["camera_role"] == "wrist"
+    assert obs["rgb"].shape == (240, 320, 3)
+    assert obs["depth"].shape == (240, 320)
+    assert obs["depth_filter"]["applied"] is True
+    assert np.isnan(obs["depth"]).sum() == obs["depth_filter"]["filtered_pixels"] > 0
+
+    cam_info = obs["camera_info"]
+    assert cam_info["serial"] == "mujoco-wrist"
+    assert cam_info["role"] == "wrist"
+    flange_from_cam = np.array(cam_info["flange_from_camera"], dtype=float)
+    base_from_cam = np.array(cam_info["base_from_camera"], dtype=float)
+    q_deg = backend.snapshot().q_deg
+    pk_flange = PiperKinematics(tcp_offset_m=None)
+    reconstructed = pk_flange.matrix(q_deg) @ flange_from_cam
+    assert np.allclose(reconstructed, base_from_cam, atol=1e-4)
 
 
 def test_seeded_reset_and_evaluate(backend):

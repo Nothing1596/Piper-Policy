@@ -105,6 +105,7 @@ class MujocoBackend(Backend):
         self.tcp_site_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE, "tcp")
         self.tray_site_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE, "tray_center")
         self.camera_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, "overview_camera")
+        self.wrist_camera_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, "wrist_camera")
 
         # Object bodies and joints
         self.cube_red_joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "cube_red_joint")
@@ -556,11 +557,120 @@ class MujocoBackend(Backend):
     # Extra Fixed Interfaces
     # -------------------------------------------------------------------------
 
-    def observe(self, width: int = 640, height: int = 480) -> dict:
-        """Render RGB and Depth observation from the fixed overview camera.
+    def _robot_segment_filter(self) -> tuple[np.ndarray, np.ndarray] | None:
+        """Cached (robot body lookup, geom_bodyid) for the base_link subtree.
 
-        Renderer is executed strictly on the caller thread.
+        Returns None when the model topology cannot supply it so observe() can
+        degrade to unfiltered depth honestly. The lookup is computed once per
+        model and never exposes names or ids to callers.
         """
+        cache = getattr(self, "_robot_segment_filter_cache", "unset")
+        if isinstance(cache, str) and cache == "unset":
+            cache = self._build_robot_segment_filter()
+            self._robot_segment_filter_cache = cache
+        return cache
+
+    def _build_robot_segment_filter(self) -> tuple[np.ndarray, np.ndarray] | None:
+        try:
+            base_id = int(mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "base_link"))
+            parents = np.asarray(self.model.body_parentid, dtype=np.int64)
+            geom_bodyid = np.asarray(self.model.geom_bodyid, dtype=np.int64)
+        except (AttributeError, TypeError, ValueError):
+            return None
+        if base_id < 0 or base_id >= parents.shape[0] or geom_bodyid.shape[0] == 0:
+            return None
+        robot = {base_id}
+        for body_id in range(parents.shape[0]):
+            ancestor = int(parents[body_id])
+            for _ in range(parents.shape[0]):
+                if ancestor in robot:
+                    robot.add(body_id)
+                    break
+                if not 0 < ancestor < parents.shape[0]:
+                    break
+                parent = int(parents[ancestor])
+                if parent == ancestor:
+                    break
+                ancestor = parent
+        body_lut = np.zeros(parents.shape[0], dtype=bool)
+        body_lut[sorted(robot)] = True
+        return body_lut, geom_bodyid
+
+    def _robot_occlusion_mask(self, seg: np.ndarray, body_lut: np.ndarray,
+                              geom_bodyid: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+        """Boolean mask of pixels whose visible geom belongs to the robot subtree.
+
+        Only segmentation entries of type mjOBJ_GEOM with an in-range geom id
+        are considered; background/unknown (-1) and non-geom pixels are never
+        masked. No label, height or task-identity heuristic is involved.
+        """
+        seg = np.asarray(seg)
+        if seg.ndim != 3 or seg.shape[2] < 2 or seg.shape[:2] != shape:
+            raise RuntimeError(
+                f"Segmentation render shape {seg.shape} does not match capture {shape + (2,)}."
+            )
+        objid = seg[..., 0].astype(np.int64)
+        objtype = seg[..., 1]
+        is_geom = (
+            (objtype == int(mujoco.mjtObj.mjOBJ_GEOM))
+            & (objid >= 0)
+            & (objid < geom_bodyid.shape[0])
+        )
+        bodies = geom_bodyid[np.where(is_geom, objid, 0)]
+        in_tree = (bodies >= 0) & (bodies < body_lut.shape[0])
+        return is_geom & in_tree & body_lut[np.clip(bodies, 0, body_lut.shape[0] - 1)]
+
+    _CAMERA_SPECS = {
+        "overview_camera": ("overview_camera", "mujoco-overview", "fixed", "sim_overview_cam_v1"),
+        "mujoco-overview": ("overview_camera", "mujoco-overview", "fixed", "sim_overview_cam_v1"),
+        "overview": ("overview_camera", "mujoco-overview", "fixed", "sim_overview_cam_v1"),
+        "fixed": ("overview_camera", "mujoco-overview", "fixed", "sim_overview_cam_v1"),
+        "wrist_camera": ("wrist_camera", "mujoco-wrist", "wrist", "sim_wrist_cam_v1"),
+        "mujoco-wrist": ("wrist_camera", "mujoco-wrist", "wrist", "sim_wrist_cam_v1"),
+        "wrist": ("wrist_camera", "mujoco-wrist", "wrist", "sim_wrist_cam_v1"),
+    }
+
+    def _resolve_camera(self, camera: str | None) -> tuple[str, str, str, str, int]:
+        spec = self._CAMERA_SPECS.get(camera or "overview_camera")
+        if spec is None:
+            raise DomainError(
+                "invalid_camera",
+                f"Unknown simulation camera {camera!r}; use mujoco-overview or mujoco-wrist.",
+                400,
+            )
+        mj_name, serial, role, cal_id = spec
+        if mj_name == "overview_camera":
+            cam_id = int(getattr(self, "camera_id", -1))
+        else:
+            cam_id = int(getattr(self, "wrist_camera_id", -1))
+            if cam_id < 0 and hasattr(mujoco, "mj_name2id"):
+                cam_id = int(mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, mj_name))
+        if cam_id < 0:
+            raise DomainError("camera_unavailable", f"Camera {mj_name!r} is not present in the loaded MuJoCo model.", 404)
+        return mj_name, serial, role, cal_id, cam_id
+
+    def _wrist_flange_from_camera(self, cam_id: int) -> np.ndarray | None:
+        try:
+            mat9 = np.zeros(9, dtype=float)
+            mujoco.mju_quat2Mat(mat9, np.asarray(self.model.cam_quat[cam_id], dtype=float))
+            T = np.eye(4, dtype=float)
+            T[:3, :3] = mat9.reshape(3, 3) @ np.diag([1.0, -1.0, -1.0])
+            T[:3, 3] = np.asarray(self.model.cam_pos[cam_id], dtype=float)
+            return T
+        except Exception:
+            return None
+
+    def observe(self, width: int = 640, height: int = 480, camera: str = "overview_camera") -> dict:
+        """Render RGB and Depth observation from the requested simulation camera.
+
+        Renderer is executed strictly on the caller thread. RGB, metric depth
+        and a capture-aligned geom segmentation pass share one updated scene
+        under the same locks; depth pixels showing geoms of the base_link
+        subtree are set to NaN (unavailable) without touching RGB, other depth
+        pixels or physics. Occluded surfaces are never inpainted. The
+        ``depth_filter`` metadata reports only counts and provenance.
+        """
+        mj_cam_name, serial, role, cal_id, cam_id = self._resolve_camera(camera)
         renderer = getattr(self._thread_local, "renderer", None)
         r_dims = getattr(self._thread_local, "renderer_dims", None)
         if renderer is None or r_dims != (width, height):
@@ -570,24 +680,54 @@ class MujocoBackend(Backend):
 
         with self.render_lock:
             with self.lock:
-                renderer.update_scene(self.data, camera="overview_camera")
-                rgb = renderer.render()
-
-                renderer.enable_depth_rendering()
-                depth = renderer.render().astype(np.float32)
-                renderer.disable_depth_rendering()
+                # Sensor images contain physical geometry, not the coloured
+                # TCP/flange debug sites that can resemble task objects.
+                options = mujoco.MjvOption()
+                options.sitegroup[:] = 0
+                renderer.update_scene(self.data, camera=mj_cam_name, scene_option=options)
+                segment_filter = self._robot_segment_filter()
 
                 source_stamp_s = time.monotonic()
                 sim_time_s = float(self.data.time)
                 epoch = int(self.epoch)
+                robot_state = self.snapshot().public()
 
                 # Camera parameters
-                cam_id = self.camera_id
                 cam_pos = self.data.cam_xpos[cam_id].copy()
                 cam_xmat = self.data.cam_xmat[cam_id].reshape(3, 3).copy()
 
+            rgb = renderer.render()
+
+            renderer.enable_depth_rendering()
+            try:
+                depth = renderer.render().astype(np.float32)
+            finally:
+                renderer.disable_depth_rendering()
+
+            depth_filter = {
+                "applied": False,
+                "method": "capture_aligned_geom_segmentation_robot_subtree",
+                "filtered_pixels": 0,
+                "image_pixels": int(depth.size),
+                "robot_body_count": 0,
+            }
+            if segment_filter is None:
+                depth_filter["reason"] = "robot_topology_unavailable"
+            else:
+                renderer.enable_segmentation_rendering()
+                try:
+                    seg = renderer.render()
+                finally:
+                    renderer.disable_segmentation_rendering()
+                body_lut, geom_bodyid = segment_filter
+                robot_mask = self._robot_occlusion_mask(seg, body_lut, geom_bodyid, depth.shape)
+                depth_filter["applied"] = True
+                depth_filter["filtered_pixels"] = int(robot_mask.sum())
+                depth_filter["robot_body_count"] = int(body_lut.sum())
+                depth[robot_mask] = np.nan
+
         # Compute camera intrinsics
-        fovy_deg = float(self.model.cam_fovy[self.camera_id])
+        fovy_deg = float(self.model.cam_fovy[cam_id])
         fovy_rad = math.radians(fovy_deg)
         fy = (height / 2.0) / math.tan(fovy_rad / 2.0)
         fx = fy  # square pixels
@@ -604,18 +744,30 @@ class MujocoBackend(Backend):
         base_from_camera[:3, 3] = cam_pos
 
         camera_info = {
+            "serial": serial,
+            "camera_serial": serial,
+            "role": role,
             "intrinsics": intrinsics,
             "base_from_camera": base_from_camera.tolist(),
-            "calibration_id": "sim_overview_cam_v1",
+            "calibration_id": cal_id,
         }
+        if role == "wrist":
+            flange_from_camera = self._wrist_flange_from_camera(cam_id)
+            if flange_from_camera is not None:
+                camera_info["flange_from_camera"] = flange_from_camera.tolist()
 
         return {
             "rgb": rgb,
             "depth": depth,
+            "camera_name": mj_cam_name,
+            "camera_serial": serial,
+            "camera_role": role,
             "camera_info": camera_info,
+            "depth_filter": depth_filter,
             "source_stamp_s": source_stamp_s,
             "sim_time_s": sim_time_s,
             "epoch": epoch,
+            "robot_state": robot_state,
         }
 
     def reset(self, seed: int = 0) -> dict:

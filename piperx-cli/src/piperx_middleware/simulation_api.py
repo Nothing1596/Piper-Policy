@@ -20,10 +20,18 @@ def attach_simulation_api(app, service, auth, operator_auth):
             raise DomainError("not_connected", "Connect the simulator first")
         return service.backend
 
-    def capture():
+    def capture(camera: str | None = None):
         import numpy as np
         from PIL import Image
-        observation = backend().observe()
+        with service.lock:
+            observation = backend().observe() if not camera else backend().observe(camera=camera)
+            robot = observation.pop('robot_state')
+            identity = {'instance_id':service.instance_id,'connection_epoch':service.epoch}
+        observation['robot_alignment'] = {
+            'method':'simulator render and state sampled under the same backend lock',
+            'offset_s':robot['feedback_stamp_s']-observation['source_stamp_s'],
+            'request_latency_s':0.,
+            'state':{'robot':robot,'observation_identity':identity}}
         rgb = observation.pop("rgb")
         depth = observation.pop("depth")
         image = io.BytesIO()
@@ -33,11 +41,11 @@ def attach_simulation_api(app, service, auth, operator_auth):
         return {**observation, "rgb_jpeg_b64": base64.b64encode(image.getvalue()).decode(),
                 "depth_npy_b64": base64.b64encode(depth_file.getvalue()).decode(),
                 "provenance": "mujoco_sensor", "source_clock": "host_monotonic",
-                'instance_id':service.instance_id,'connection_epoch':service.epoch}
+                **identity}
 
     @app.get("/v1/simulation/observation", dependencies=auth)
-    def observation():
-        return pool.submit(capture).result(timeout=30)
+    def observation(camera: str | None = None, serial: str | None = None):
+        return pool.submit(capture, serial or camera).result(timeout=30)
 
     @app.get("/v1/simulation/metadata", dependencies=auth)
     def metadata():
