@@ -336,10 +336,25 @@ def verify_transfer(transfer):
         if not isinstance(transfer,dict):raise ValueError('transfer is not a mapping')
         source=transfer['source']
         if not isinstance(source,str):raise ValueError('transfer source is not a name')
+        # A dropped carry has no normal before-release snapshot. Report the
+        # recorded failure rather than treating its absent phase as corruption.
+        end_reason=transfer.get('end_reason')
+        if transfer.get('grip_lost') or transfer.get('grip_lost_before_open') or end_reason in ('grip_lost','grip_lost_between_decisions'):
+            info['reason_code']='grip_lost'
+            raise ValueError('grip lost during carry'+(' ('+end_reason+')' if end_reason else ''))
+        if transfer.get('incomplete'):
+            info['reason_code']='incomplete_transfer'
+            raise ValueError('transfer ended before controlled release')
+        if transfer.get('controlled_release') is False:
+            info['reason_code']='uncontrolled_release'
+            raise ValueError('controlled_release is not True')
         snaps={}
         for label in ('before','held','lifted','before_release','after'):
             state=transfer.get('state_'+label)
-            objs,_=_check(state)
+            if state is None:raise ValueError('missing state_'+label)
+            try:objs,_=_check(state)
+            except (ValueError,KeyError,TypeError) as exc:
+                raise ValueError('invalid state_'+label+': '+str(exc)) from exc
             if source not in objs:raise ValueError('source absent from state_'+label)
             snaps[label]=(state,objs)
         if any(objs[source].get('kind')!='dynamic' for _,objs in snaps.values()):raise ValueError('source is not dynamic in every snapshot')
