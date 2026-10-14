@@ -1,0 +1,11 @@
+{
+  "source_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "provenance": "human_review",
+  "scope": "required_steps",
+  "time_tolerance_s": 0.25,
+  "minimum_time_iou": 0.1,
+  "role_aliases": {"red_block": ["red cube", "red object"], "target": ["green region", "green tray"]},
+  "steps": [
+    {"id": "red_enters_target", "operations": ["place", "pick_place", "move"], "object_roles": ["red_block"], "time_range_s": [2.0, 3.0]}
+  ]
+}

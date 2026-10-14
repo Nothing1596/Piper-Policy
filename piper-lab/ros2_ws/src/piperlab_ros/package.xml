@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>piperlab_ros</name><version>0.1.0</version>
+  <description>Fail-closed Piper X learning runtime and simulation</description>
+  <maintainer email="1493038838@qq.com">Nothing</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <exec_depend>rclpy</exec_depend><exec_depend>piperlab_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend><exec_depend>std_srvs</exec_depend>
+  <exec_depend>std_msgs</exec_depend><exec_depend>geometry_msgs</exec_depend><exec_depend>trajectory_msgs</exec_depend>
+  <exec_depend>shape_msgs</exec_depend><exec_depend>agx_arm_msgs</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend><exec_depend>moveit_servo</exec_depend>
+  <exec_depend>rosbridge_server</exec_depend><exec_depend>foxglove_bridge</exec_depend>
+  <exec_depend>agx_arm_ctrl</exec_depend><exec_depend>agx_arm_moveit</exec_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

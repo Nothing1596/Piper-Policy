@@ -1,0 +1,37 @@
+mode: simulation
+model: piper_x
+commissioned: false
+limits_verified: false
+collision_scene_verified: false
+collision_scene_file: null
+stop_behavior_verified: false
+can:
+  interface: can0
+  bitrate: 1000000
+  usb_vid_pid: '1d50:606f'
+  serial: null
+  firmware: null
+camera:
+  serial: null
+  mount: null
+  width: 640
+  height: 480
+  fps: 30
+  calibration_file: null
+gripper:
+  model: null
+  min_m: 0.0
+  max_m: 0.1
+tcp_m_rad: null
+joint_names: [joint1, joint2, joint3, joint4, joint5, joint6]
+# Simulation limits only. Real commissioning requires verified URDF/firmware limits.
+joint_lower: [-2.6, 0.0, -2.9, -1.8, -1.2, -3.1]
+joint_upper: [2.6, 3.1, 0.0, 1.8, 1.2, 3.1]
+joint_speed_rad_s: 0.15
+gripper_speed_m_s: 0.02
+stale_timeout_s: 0.2
+max_clock_skew_s: 0.05
+control_hz: 20
+workspace_min_m: [0.10, -0.30, 0.05]
+workspace_max_m: [0.50, 0.30, 0.50]
+gpu_uuid: null # Select the deployment machine explicitly before training.

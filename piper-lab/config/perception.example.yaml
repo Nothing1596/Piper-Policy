@@ -1,0 +1,119 @@
+# Perception layer example configuration.
+#
+# This file documents the knobs the perception layer reads. It is an EXAMPLE:
+# nothing here is a measured value for any rig. Copy it, fill in real numbers,
+# and record where each number came from.
+#
+# Boundaries worth restating, because they are easy to erode:
+#   * The perception layer never enables, arms or moves hardware.
+#   * It never writes SafetyGate state; piperlab.safety stays the only
+#     admission point for motion.
+#   * A missing or stale source stamp is refused, never replaced with the
+#     local clock.
+#   * Over-budget work raises. Nothing is silently truncated.
+
+# --- time ------------------------------------------------------------------
+clock:
+  # Domain of /lab/rgb and /lab/observation header.stamp. Both are published
+  # from the same rclpy node clock today (runtime.py, mock_device.py), so the
+  # identity mapping is correct on one host. If the executor runs on another
+  # machine, set this to cross_host_unsynchronized and expect refusals rather
+  # than invented offsets.
+  source_domain: ros_wall
+  clock_mapping_id: identity
+  # Contract window, kept in step with hardware.yaml.
+  max_age_s: 0.2
+  max_clock_skew_s: 0.05
+  # Bumped whenever a device, driver or service is restarted. Data from
+  # different epochs is never interleaved.
+  acquisition_epoch: 0
+
+# --- budgets ---------------------------------------------------------------
+# Every arrow has a number, and exceeding it raises BudgetExceeded.
+budget:
+  ring_bytes: 268435456            # 256 MiB cap on retained L1 payload
+  max_frames_per_source_per_window: 24
+  max_candidates_total: 48
+  window_s: 30.0
+  max_entities_per_frame: 16
+  max_track_age_s: 5.0
+  max_entities_total: 64
+  max_evidence_frames_per_query: 8
+  evidence_window_s: 1.0
+  escalation_min_gap_s: 0.5
+  heartbeat_s: 2.0
+  max_text_chars: 1048576
+
+retention:
+  # TTLs are maximums, not guarantees: capacity wins. Anything removed is
+  # reported as capacity_evicted or retention_l1, never silently substituted.
+  l1_s: 20.0
+  l2_s: 300.0
+  l3_s: 3600.0
+  capacity_evicts_before_ttl: true
+
+# --- selection -------------------------------------------------------------
+selection:
+  # Admission floor for *forwarding* only. Below-threshold candidates are
+  # reported as dropped and remain re-selectable; they are not deleted.
+  min_score: 0.05
+  prefer_distinct_hints: true
+  scorers:
+    - motion_energy
+    - color_blob
+
+# --- degraded modes when the slow model is behind --------------------------
+# Behaviour contract, not a description of data age.
+degraded:
+  hold_after_s: 0.15               # no new primitives; keep verifying
+  freeze_after_s: 1.0              # freeze the last verified state
+  observe_only_after_s: 5.0        # observation continues, actions refused
+
+# --- escalation ------------------------------------------------------------
+escalation:
+  heartbeat_s: 2.0                 # floor so a static scene cannot blind the loop
+  triggers:
+    - heartbeat
+    - world_change
+    - observation_gap
+    - conflict
+    - stale_view
+    - executability_flip
+    - gripper_transition
+    - attention
+  # The slow model may propose interpretation, attention and goals. It may not
+  # write state and may not authorise motion.
+
+# --- camera / calibration --------------------------------------------------
+# Stage 1 has NO calibration artifacts: this repository publishes no
+# base_link-from-camera transform and no wrist extrinsics, so every projection
+# returns available=false with reason=no_calibration. Fill these in only from a
+# real, identified measurement, and never leave a placeholder that looks real.
+camera:
+  source_id: camera
+  calibration_file: null           # e.g. config/calibration/camera-<serial>.yaml
+  calibration_id: null             # must match the file's own calibration_id
+  intrinsics: null                 # 3x3 row-major, from /lab/camera_info when measured
+  distortion: null                 # 5 coefficients (plumb_bob)
+  base_from_camera: null           # 4x4 row-major, base_link <- camera optical frame
+  depth_scale_m: null              # required for metric unprojection
+
+# --- safety-critical analyses ----------------------------------------------
+# Hard-coded in perception/safety_critical.py and NOT model-addressable. Listed
+# here only so the active set can be asserted at startup. Attention requests
+# that name any of these are rejected.
+safety_critical:
+  always_on:
+    - frame_liveness
+    - decode_integrity
+    - state_freshness
+    - gap_accounting
+    - clock_provenance
+attention_tunable:
+  - object_detect
+  - pose
+  - embedding
+  - motion_energy
+  - frame_rate
+  - event_ordering
+  - evidence_prefetch

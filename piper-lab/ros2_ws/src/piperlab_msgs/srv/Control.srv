@@ -1,0 +1,7 @@
+string operation
+string owner
+string session_id
+---
+bool accepted
+string session_id
+string reason

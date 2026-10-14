@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=71", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "piper-lab"
+version = "0.2.1"
+description = "Piper X / RealSense ROS 2 data and learning pipeline"
+requires-python = ">=3.12"
+dependencies = ["numpy>=1.26,<2.3", "PyYAML>=6,<7", "Pillow>=10,<13", "mcap>=1.2,<2", "mcap-ros2-support>=0.5,<1", "roslibpy>=2,<3"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+video = ["av==18.1.0", "opencv-python==4.11.0.86", "numpy==2.2.6"]
+detector = ["onnxruntime==1.30.0", "trackers==2.6.1", "supervision==0.30.5", "opencv-python==4.11.0.86", "numpy==2.2.6"]
+model = ["httpx>=0.28,<1", "pydantic>=2.10,<3", "jsonschema>=4.20,<5"]
+mcp = ["mcp>=1.26,<2", "httpx>=0.28,<1", "jsonschema>=4.20,<5", "av==18.1.0", "opencv-python==4.11.0.86", "numpy==2.2.6"]
+simulation = ["mujoco==3.14.0"]
+
+[project.scripts]
+piper-lab = "piperlab.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

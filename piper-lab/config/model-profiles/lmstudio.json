@@ -1,0 +1,8 @@
+{
+  "provider": "lmstudio",
+  "model": "piper-vision-qwen27",
+  "base_url": "http://127.0.0.1:1234/v1",
+  "timeout_s": 300,
+  "max_images": 6,
+  "max_output_tokens": 4096
+}
