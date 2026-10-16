@@ -114,3 +114,12 @@ async def test_scripted_multi_action_queue_is_rejected(tmp_path,monkeypatch):
     with pytest.raises(DecisionRejected):
         await d(None,None,{'max_tokens':100,'messages':[],'tools':[{'function':{'name':'move_to'}}]},'one')
     assert d.turn==0
+
+
+def test_prepare_places_required_image_views_before_session_cache_and_discourages_redundant_json_reads(tmp_path):
+    d=AgyDecider(tmp_path/'decision')
+    prompt,_=d.prepare({'messages':[],'tools':[{'function':{'name':'move_linear'}}]})
+    assert prompt.index('REQUIRED_IMAGE_VIEWS') < prompt.index('WORKING_CONTEXT') < prompt.index('SESSION_CACHE')
+    assert 'do NOT call view_file on SESSION_CACHE JSON files' in prompt
+    assert 'multiple_clusters_detected' in prompt
+    assert 'move_linear' in prompt

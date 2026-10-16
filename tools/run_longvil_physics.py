@@ -72,10 +72,17 @@ def ssh_args(args):
             '-o','StrictHostKeyChecking=yes',args.host]
 
 
-async def remote(args,operation,root):
+def helper_argv(args, operation, root, scene=None):
+    """Same experiment helper locally or over SSH; no robot action retry."""
     pythonpath=args.remote_root+'/source/piperx-cli/src:'+args.remote_root+'/source/piper-lab/src'
-    command=shlex.join(['env','PYTHONPATH='+pythonpath,args.remote_python,args.remote_helper,operation,'--root',root])
-    process=await asyncio.create_subprocess_exec('ssh',*ssh_args(args),command,
+    command=['env','MUJOCO_GL=egl','PYOPENGL_PLATFORM=egl','PYTHONPATH='+pythonpath,
+             args.remote_python,args.remote_helper,operation,'--root',str(root)]
+    if scene is not None:command.extend(['--scene',str(scene)])
+    return command if args.host=='local' else ['ssh',*ssh_args(args),shlex.join(command)]
+
+
+async def remote(args,operation,root):
+    process=await asyncio.create_subprocess_exec(*helper_argv(args,operation,root),
         env={k:v for k,v in os.environ.items() if k!='DEEPSEEK_API_KEY'},
         stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
     try:out,err=await asyncio.wait_for(process.communicate(),60)

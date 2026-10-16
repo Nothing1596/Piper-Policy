@@ -20,6 +20,31 @@ class DecisionRejected(ValueError):
     """Known unexecuted model response; end this case, not the other condition."""
 
 
+def retryable_admission(result):
+    if not isinstance(result, dict) or result.get('status') != 'ERROR':
+        return False
+    message = str(result.get('error', ''))
+    usage = result.get('usage')
+    keys = ('input_tokens', 'output_tokens', 'thinking_tokens', 'cache_read_tokens', 'total_tokens')
+    return (message.startswith('Eligibility check failed:')
+            and any(code in message for code in ('code 503', 'code 429'))
+            and result.get('num_turns') == 0 and not result.get('conversation_id')
+            and not result.get('response') and not result.get('structured_output')
+            and isinstance(usage, dict)
+            and all(type(usage.get(k)) is int and usage[k] == 0 for k in keys))
+
+
+def interrupted_generation(result):
+    """A provider generation can be replaced; its candidate is never executable."""
+    if not isinstance(result, dict) or result.get('status') != 'ERROR':
+        return False
+    message = str(result.get('error', '')).lower()
+    return (not message.startswith('eligibility check failed:') and
+            any(term in message for term in ('connection reset by peer', 'unexpected eof',
+                                             'stream disconnected', 'read: connection reset',
+                                             'unavailable (code 503)', 'resource_exhausted (code 429)')))
+
+
 def save(path, data):
     temp = path.with_suffix('.tmp')
     temp.write_text(json.dumps(data, ensure_ascii=False, indent=2))
@@ -69,6 +94,7 @@ class AgyDecider:
         self.turn = 0
         self.seen_images = set()
         self.prior_message_count = 0
+        self.generation_interruptions = 0
         self.images = {}
         self.image_paths = {}
         self.stderr = None
@@ -180,12 +206,14 @@ class AgyDecider:
             'The controller executes exactly one returned tool call, then sends actual feedback before your next decision. '
             'Use view_file to SEE every image in REQUIRED_IMAGE_VIEWS before answering; actual pixels, not filenames. '
             'view_file is a NATIVE evidence-reading call: invoke it now, never put it in the returned tool_calls array. '
+            'WORKING_CONTEXT and AVAILABLE_ROBOT_TOOLS below already inline context/current.json and context/tools.json in full; '
+            'do NOT call view_file on SESSION_CACHE JSON files (current.json, tools.json, index.json) during normal turns—only read them if mid-turn compaction truncated this prompt. '
             'The returned tool_calls array may contain ONLY names from AVAILABLE_ROBOT_TOOLS. '
             'Public session cache files and exported images may be read with view_file; all historic exports stay available. '
             'Shell, code, networking, private answers, other sessions and delegation are blocked. '
             'Do not write or queue scripts/actions. Return one JSON tool decision matching the supplied tool schema; '
             'do not call native robot tools yourself. No private reasoning is requested. '
-            'Copy exact AbsolutePath values. If context was compacted, read context/current.json, context/tools.json and context/index.json at the absolute paths below; never guess paths or use private transcripts. '
+            'Copy exact AbsolutePath values; never guess paths or use private transcripts. '
             'The final response MUST be exactly {"content":"brief observation and image IDs supporting this decision", '
             '"plan":"short current task plan", "tool_calls":[{"name":"chosen_tool", "arguments":{...}}]}. '
             'Your plan is persisted through the existing task_plan store and read back as current_plan on the next turn. '
@@ -193,8 +221,13 @@ class AgyDecider:
             'and relevant uncertainty. Keep it short and revise it when feedback disagrees. This is a provisional guide, '
             'not a requirement to hit estimated numeric targets. No extra task_plan tool call is needed for this writeback. '
             'In content, cite frame IDs that changed or supported your decision; if a view is occluded or adds nothing, say so. '
+            'When grasp_target or placement_target returns a candidate, check selection_evidence (including multiple_clusters_detected and top_surface_summary) '
+            'and inspect candidate_overlay green surface points if neighboring objects might contaminate the ROI; tighten roi/polygon before moving if contaminated. '
+            'Use move_linear (xyz_m only, never pass rpy_deg) for vertical descent onto an object or support, vertical lift after grasp, and vertical retreat after release; '
+            'use move_to for free-space approach above targets. '
             'Before finish_task with outcome=completed, actually open/release, move the gripper away by at least 0.03 m using a justified path, '
-            'and inspect fresh feedback. Final acceptance also checks no robot-object contact and stability over 2 seconds. '
+            'and inspect fresh post-retreat visual feedback to verify that both target and supporting objects remain upright (not tipped/collapsed) and satisfy the task relation. '
+            'Final acceptance also checks no robot-object contact and stability over 2 seconds. '
             'For an unsuccessful attempt use finish_task with outcome=failed or aborted; do not make extra motions to satisfy success checks. '
             'Do not return a bare name/arguments object or markdown fences. '
             'Derive the task from this session demonstration, never remembered benchmark answers. A fresh CLI segment continues the SAME task; do not restart completed actions. '
@@ -237,12 +270,12 @@ class AgyDecider:
             instructions = instructions.replace(
                 'Each robot decision uses a fresh agy conversation;',
                 f'A provider conversation is reused for at most {self.provider_turn_window} decisions, then refreshed;')
-        prompt = instructions+'\nSESSION_CACHE (exact view_file AbsolutePath values):\n'+json.dumps(self.cache_paths())
-        prompt += '\nREQUIRED_IMAGE_VIEWS (copy exact paths):\n'+json.dumps(sorted(required))
-        prompt += '\nWORKING_CONTEXT:\n'+json.dumps(capsule,ensure_ascii=False)
+        prompt = instructions+'\nREQUIRED_IMAGE_VIEWS (call view_file on these exact image paths now):\n'+json.dumps(sorted(required))
+        prompt += '\nWORKING_CONTEXT (already inlines context/current.json):\n'+json.dumps(capsule,ensure_ascii=False)
         if not self.exploration:
             prompt+='\nRemaining total output budget INCLUDING thinking: '+str(payload.get('max_tokens'))+' tokens. Make a concise next decision, not lengthy analysis.'
-        prompt+='\nAVAILABLE_ROBOT_TOOLS:\n'+json.dumps(payload['tools'],ensure_ascii=False)
+        prompt+='\nAVAILABLE_ROBOT_TOOLS (already inlines context/tools.json):\n'+json.dumps(payload['tools'],ensure_ascii=False)
+        prompt+='\nSESSION_CACHE (compaction fallback only; do NOT view_file unless WORKING_CONTEXT above was compacted):\n'+json.dumps(self.cache_paths())
         return prompt, required
 
     def cache_paths(self):
@@ -260,6 +293,26 @@ class AgyDecider:
         self.context.record_tool_result(turn,value)
 
     async def request(self, prompt):
+        # Only explicit pre-inference rejection is retryable. Unknown transport
+        # outcomes, partial generations and robot execution are never replayed.
+        for attempt in range(4):
+            result = await self._request_once(prompt)
+            if not retryable_admission(result) or attempt == 3:
+                return result
+            retry_dir = self.root/'admission-retries'
+            retry_dir.mkdir(exist_ok=True)
+            stem = f'turn-{self.turn:03d}-attempt-{attempt:02d}'
+            save(retry_dir/(stem+'.json'), {
+                'result': result, 'delay_s': (5, 15, 45)[attempt],
+                'action_dispatched': False, 'reason': 'explicit pre-inference service rejection'})
+            stream = self.root/f'turn-{self.turn:03d}-stream.jsonl'
+            if stream.exists():
+                stream.rename(retry_dir/(stem+'-stream.jsonl'))
+            await self.close()
+            await asyncio.sleep((5, 15, 45)[attempt])
+        raise AssertionError('unreachable')
+
+    async def _request_once(self, prompt):
         await self.start()
         self.proc.stdin.write((json.dumps({'event':'user','message':{'content':prompt}},ensure_ascii=False)+'\n').encode())
         await self.proc.stdin.drain()
@@ -310,9 +363,14 @@ class AgyDecider:
                   'error_type':type(exc).__name__,'usage':None,'cost':None,'action_dispatched':False})
             raise
         save(self.root/f'turn-{self.turn:03d}-result.json',result)
-        if result.get('status') != 'SUCCESS':raise RuntimeError('agy did not succeed: '+str(result.get('error',result.get('status'))))
+        interrupted = interrupted_generation(result)
+        terminal_failure = result.get('status') != 'SUCCESS' and not interrupted
+        if terminal_failure and (not self.conversation or
+                result.get('conversation_id') != self.conversation or
+                not isinstance(result.get('usage'), dict) or type(result.get('num_turns')) is not int):
+            raise RuntimeError('agy did not succeed: '+str(result.get('error',result.get('status'))))
         if result.get('conversation_id') != self.conversation:raise ValueError('agy result session mismatch')
-        if type(result.get('num_turns')) is not int or result['num_turns'] <= self.previous_turns:
+        if not interrupted and not terminal_failure and (type(result.get('num_turns')) is not int or result['num_turns'] <= self.previous_turns):
             raise ValueError('No fresh CLI decision for this turn')
         delta = usage_delta(result.get('usage'),self.previous_usage)
         hook_rows = [json.loads(l) for l in self.audit_path.read_text().splitlines()]
@@ -332,9 +390,39 @@ class AgyDecider:
                        model_invocations=sum(r['phase']=='invocation' for r in rows),
                        cli_turns_delta=result['num_turns']-self.previous_turns,
                        provider_cost=None, usage_source='per-conversation cumulative result delta; run totals sum receipts; thinking included in output',
+                       provider_status=result.get('status'), candidate_dispatched=False,
                        tools_sha256=self.context.files[str(self.context.contract_path)],
                        context_sha256=self.context.files[str(self.context.current_path)])
         save(self.root/f'turn-{self.turn:03d}-receipt.json',receipt)
+        if terminal_failure:
+            # Even a nonretryable error may have read images or generated text.
+            # Return accounting only; the runner charges it and then pauses.
+            await self.close()
+            self.turn += 1
+            return {'model': self.model, 'usage': {'prompt_tokens': delta['input_tokens'],
+                    'completion_tokens': delta['output_tokens'],
+                    'completion_tokens_details': {'reasoning_tokens': delta['thinking_tokens']}},
+                    'provider_failure': {'error': result.get('error'), 'action_dispatched': False},
+                    'choices': [{'finish_reason': 'provider_error', 'message': {
+                        'role': 'assistant', 'content': 'Provider error; candidate discarded.', 'tool_calls': []}}]}
+        if interrupted:
+            self.generation_interruptions += 1
+            failure = {'error': result.get('error'), 'can_retry': self.generation_interruptions <= 3,
+                       'attempt': self.generation_interruptions, 'action_dispatched': False,
+                       'partial_result_path': str(self.root/f'turn-{self.turn:03d}-result.json')}
+            # No failed plan or tool array enters executable history. The next
+            # provider sees the original task and fresh feedback from the runner.
+            await self.close()
+            self.prior_message_count = 0
+            self.seen_images.clear()
+            self.turn += 1
+            return {'model': self.model, 'usage': {'prompt_tokens': delta['input_tokens'],
+                    'completion_tokens': delta['output_tokens'],
+                    'completion_tokens_details': {'reasoning_tokens': delta['thinking_tokens']}},
+                    'provider_interruption': failure,
+                    'choices': [{'finish_reason': 'provider_interrupted', 'message': {
+                        'role': 'assistant', 'content': 'Interrupted candidate discarded; no actions dispatched.',
+                        'tool_calls': []}}]}
         if required-seen:raise DecisionRejected('Image delivery not confirmed; no robot request dispatched: '+str(len(required-seen)))
         if not self.exploration and delta['output_tokens'] > payload['max_tokens']:raise DecisionRejected('Real CLI output exceeded remaining budget; no robot request dispatched')
         from jsonschema import validate, ValidationError

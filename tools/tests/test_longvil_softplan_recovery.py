@@ -136,9 +136,9 @@ async def test_plan_on_motion_and_finish_need_no_plan_write(tmp_path,monkeypatch
     await go()
     assert report['status']=='finished' and report['motions']==1
     assert report['plan_reads']==0 and report['plan_writes']==0
-    assert report['plan_sync_reads']==2 and report['api_calls']==2 and report['tool_calls']==2
+    assert report['plan_sync_reads']==3 and report['api_calls']==2 and report['tool_calls']==2
     assert report['plan_policy']=='soft' and report['plan_protocol_complete'] is None
-    assert len([c for c in session.calls if c[0]=='task_plan'])==3   # create + one sync read per request
+    assert len([c for c in session.calls if c[0]=='task_plan'])==4   # create + one sync per request + post-action sync
     assert [progress_of(p)['current_plan']['version'] for p in payloads]==[1,1]
     assert all(progress_of(p)['plan_policy'].startswith('soft') for p in payloads)
 
@@ -150,10 +150,10 @@ async def test_plan_sync_refreshes_real_version_without_extra_api_or_tool_rounds
     go,report,events=run_loop(tmp_path,monkeypatch,args,evidence,session,responses,payloads)
     await go()
     assert report['plan_writes']==1 and report['plan_reads']==0
-    assert report['plan_sync_reads']==3 and report['api_calls']==3 and report['tool_calls']==3
+    assert report['plan_sync_reads']==4 and report['api_calls']==3 and report['tool_calls']==3
     assert [progress_of(p)['current_plan']['version'] for p in payloads]==[1,2,2]
     assert session.plan['version']==2
-    assert len([c for c in session.calls if c[0]=='task_plan'])==5   # create + 3 sync reads + 1 model update
+    assert len([c for c in session.calls if c[0]=='task_plan'])==6   # create + 3 decision syncs + post-action sync + model update
 
 
 @pytest.mark.asyncio
@@ -496,7 +496,7 @@ INTERRUPTED_RESPONSES=[gripper('motion-0001',.02,'live-0001'),motion('move_to','
 @pytest.mark.asyncio
 async def test_interrupted_loop_grades_partial_attempt_after_session_close(tmp_path,monkeypatch):
     seen={};box={}
-    def grade(gt,transfers,final_state=None,unknown_outcome=None):
+    def grade(gt,transfers,final_state=None,unknown_outcome=None,actions=None):
         seen.update(gt=gt,transfers=copy.deepcopy(transfers),final_state=final_state,
                     unknown_outcome=unknown_outcome,closed=box['manager'].closed)
         return {'success':False,'goal_success':False,'ordered_success':False,'steps':[]}
@@ -517,21 +517,21 @@ async def test_interrupted_loop_grades_partial_attempt_after_session_close(tmp_p
     assert report['graded'] is True and report['physical_success'] is False
     assert report['goal_coverage_success'] is False and report['ordered_success'] is False
     assert report['unknown_outcome'] is True
-    assert report['exceptions'][0]['type']=='ModelCallAnomaly' and 'unknown' in report['exceptions'][0]['message']
+    assert report['exceptions'][0]['type']=='ExecutionOutcomeUnknown' and 'unknown' in report['exceptions'][0]['message']
     assert (out/'transfers.private.json').exists() and (out/'final-state.private.json').exists()
     assert (out/'physics-score.private.json').exists()
 
 
 @pytest.mark.asyncio
 async def test_closeout_failure_never_masks_the_original_halt_cause(tmp_path,monkeypatch):
-    def grade(gt,transfers,final_state=None,unknown_outcome=None):
+    def grade(gt,transfers,final_state=None,unknown_outcome=None,actions=None):
         raise TypeError("private_grade() got an unexpected keyword argument 'final_state'")
     main_args,manager,_,_,_=main_scene(tmp_path,monkeypatch,'run2',INTERRUPTED_SCRIPT,INTERRUPTED_RESPONSES,grade)
     out=main_args.output
     await online.main(main_args)
     report=json.loads((out/'report.json').read_text())
     assert report['status']=='paused' and report['graded'] is False
-    assert report['exceptions'][0]['type']=='ModelCallAnomaly' and 'unknown' in report['exceptions'][0]['message']
+    assert report['exceptions'][0]['type']=='ExecutionOutcomeUnknown' and 'unknown' in report['exceptions'][0]['message']
     assert report['closeout_error'][0]['type']=='TypeError'
     assert (out/'transfers.private.json').exists() and (out/'final-state.private.json').exists()
 
@@ -554,7 +554,7 @@ async def test_native_probe_never_reads_gt_or_invokes_the_scorer(tmp_path,monkey
 
 @pytest.mark.asyncio
 async def test_changed_post_action_camera_identity_marks_unknown_and_prevents_next_decision(tmp_path,monkeypatch):
-    def grade(gt,transfers,final_state=None,unknown_outcome=None):
+    def grade(gt,transfers,final_state=None,unknown_outcome=None,actions=None):
         assert unknown_outcome is True
         return {'success':False,'goal_success':False,'ordered_success':False,'steps':[]}
     args,manager,session,payloads,_=main_scene(tmp_path,monkeypatch,'changed-camera',

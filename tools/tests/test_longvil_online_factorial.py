@@ -43,7 +43,7 @@ async def test_eight_conditions_share_feedback_and_calculators(plan,skill,effort
         assert {'scene_query','grasp_target','placement_target','preview_move_to'}<=names
         assert 'PRIVATE_GT_ANSWER' not in json.dumps(payload)
         if plan=='off':assert 'current_plan' not in json.dumps(payload['messages'])
-    syncs=len(sequence) if plan=='on' else 0
+    syncs=len(sequence)+1 if plan=='on' else 0  # Includes post-action version read.
     assert report['plan_sync_reads']==syncs
     assert len([c for c in session.calls if c[0]=='task_plan'])==(1+syncs+3 if plan=='on' else 1)
 

@@ -138,3 +138,37 @@ def test_exploration_keeps_native_limits_but_removes_experiment_constants():
     g=online.OnlineGate(concurrent_tools=True)
     calls=[{'id':str(i),'function':{'name':n}} for i,n in enumerate(['move_to','robot_status'])]
     assert g.batch(calls,0) is None
+
+
+def test_contact_signal_does_not_claim_holding_and_width_drift_invalidates():
+    a=online.grip_signal(signal(True)); b=online.grip_signal(signal(True))
+    assert 'held' not in a and a['bilateral_contact']
+    b['width_m']=a['width_m']-.017
+    assert online.grip_changed(a,b)
+    b['width_m']=a['width_m']-.001
+    assert not online.grip_changed(a,b)
+
+
+@pytest.mark.asyncio
+async def test_width_drift_with_continuing_contact_discards_stale_candidate(tmp_path):
+    args,evidence=fixture(tmp_path);args.exploration=True;args.completion_budget=None;args.max_rounds=2
+    class WidthSession(FeedbackSession):
+        width=.0687
+        async def call_tool(self,name,args):
+            r=await super().call_tool(name,args)
+            if name=='robot_status':r.structuredContent['robot']['gripper_width_m']=self.width
+            if name=='camera_observe':r.structuredContent['frames'][0]['robot_alignment']['state']['robot']['gripper_width_m']=self.width
+            return r
+    sess=WidthSession();turn=0
+    async def decide(a,c,p,i):
+        nonlocal turn
+        turn+=1
+        if turn==1:
+            sess.width=.0516
+            return response([('move_to',{'request_id':'stale-width','xyz_m':[.3,0,.2],'observation_id':'live-0001'})],'old width')
+        assert 'does not prove a drop' in json.dumps(p)
+        return response([('robot_status',{})],'Contact persists but width changed; inspect again')
+    args.model_decider=decide;report={}
+    await online.online_loop(sess,args,evidence,lambda e:None,tmp_path,report,None)
+    assert not sess.moves and report['stale_decisions_returned']==1
+    assert report['model_authored_plan_updates']==1

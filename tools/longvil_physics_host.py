@@ -102,6 +102,12 @@ def scene_backend_class():
                 self.drawer_joint = jid
                 self.data.qpos[self.model.jnt_qposadr[jid]] = self.scene.get('drawer_initial_qpos', 0.)
                 mujoco.mj_forward(self.model, self.data)
+            if self.scene.get('approximate_recovery'):
+                from approximate_physics_recovery import apply_recorded_pose
+                receipt = apply_recorded_pose(self, self.scene['approximate_recovery'])
+                profile = os.environ.get('PIPER_PHYSICS_PROFILE')
+                if profile:
+                    (Path(profile)/'recovery-initialization.private.json').write_text(json.dumps(receipt))
 
         def connect(self):
             super().connect()

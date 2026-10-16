@@ -70,3 +70,15 @@ def test_actual_corrupt_or_missing_snapshot_names_the_phase():
     t=carry('block',P0,P1);t['state_held']={}
     assert 'invalid state_held' in online.verify_transfer(t)['reasons'][0]
     assert online.verify_transfer(carry('block',P0,P1))['valid']
+
+
+@pytest.mark.parametrize('between',[False,True])
+def test_contact_loss_requires_measured_lift_not_claim_or_touch(between):
+    t=carry('block',P0,P1,lift=.0002,claim=.10,controlled=False)
+    assert online.contact_loss_reason(t,between_decisions=between)=='contact_lost_before_verified_lift'
+    t['end_reason']=online.contact_loss_reason(t,between_decisions=between)
+    assert online.verify_transfer(t)['reason_code']=='contact_lost_before_verified_lift'
+    lifted=carry('block',P0,P1,lift=.05,controlled=False)
+    assert online.contact_loss_reason(lifted,between_decisions=between)==('grip_lost_between_decisions' if between else 'grip_lost')
+    lifted['state_lifted']['bilateral_contact_objects']=[]
+    assert online.contact_loss_reason(lifted)=='contact_lost_before_verified_lift'

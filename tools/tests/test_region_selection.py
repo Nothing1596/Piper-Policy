@@ -89,9 +89,9 @@ async def test_grasp_then_placement_pass_same_selection_to_worker(tmp_path, monk
         assert 'poses' not in rejected and not session.moves
         return
     calls=[b for n,b in session.calls if n=='scene_query']
-    assert len(calls)==4 and not session.moves
-    assert calls[2][kind]==region
-    assert calls[3]['observations'][0][kind]==region
+    assert len(calls)==3 and not session.moves  # Same-frame support plane reused.
+    assert calls[0][kind]==region
+    assert calls[2]['observations'][0][kind]==region
     receipt=next(e['result'] for e in events if e['kind']=='tool_result' and e['name']=='placement_target')
     assert receipt['status']=='ok'
     assert receipt['selection_evidence']['target_region']=={kind:region}

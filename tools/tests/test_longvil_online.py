@@ -63,8 +63,9 @@ def plan_update(version=1):
 
 
 @pytest.mark.asyncio
-async def test_model_decision_receives_actual_previous_result_and_new_pixels(tmp_path,monkeypatch):
-    args,evidence=fixture(tmp_path);session=Session();payloads=[];events=[]
+@pytest.mark.parametrize('max_seconds', [60, None])
+async def test_model_decision_receives_actual_previous_result_and_new_pixels(tmp_path,monkeypatch,max_seconds):
+    args,evidence=fixture(tmp_path);args.max_seconds=max_seconds;session=Session();payloads=[];events=[]
     async def paid(args,client,payload,ident):
         payloads.append(copy.deepcopy(payload));turn=len(payloads)-1
         if turn in (0,4):name='task_plan';body={'operation':'get','task_id':session.plan['task_id']}
@@ -307,3 +308,28 @@ def test_projections_keep_real_errors_and_exclude_gt_and_files():
            'observation_path':'/private/frame.json','rgb_path':'/private/image.jpg','point_m':[.3,.1,.2]}
     projected=online.strip_paths(value,{'/private/frame.json':'live-0001'})
     assert projected=={'error':{'code':'ik_no_solution','message':'reject'},'observation_path':'live-0001','point_m':[.3,.1,.2]}
+
+
+def test_select_tools_enforces_additional_properties_false_on_move_linear_and_documents_path_semantics():
+    native_move_linear=tool('move_linear',{'type':'object','required':['request_id','xyz_m'],'properties':{
+        'request_id':{'type':'string'},
+        'xyz_m':{'type':'array','items':{'type':'number'},'minItems':3,'maxItems':3},
+        'speed_percent':{'type':'integer'},
+        'timeout_s':{'type':'number'},
+    }}).model_dump()
+    native_move_to=tool('move_to',{'type':'object','required':['request_id','xyz_m'],'properties':{
+        'request_id':{'type':'string'},
+        'xyz_m':{'type':'array','items':{'type':'number'},'minItems':3,'maxItems':3},
+        'rpy_deg':{'type':'array','items':{'type':'number'},'minItems':3,'maxItems':3},
+    }}).model_dump()
+    selected={t['name']:t for t in online.select_tools([native_move_linear,native_move_to])}
+    assert selected['move_linear']['inputSchema']['additionalProperties'] is False
+    assert 'do NOT pass rpy_deg' in selected['move_linear']['description']
+    assert 'straight Cartesian line' in selected['move_linear']['description']
+    assert 'Joint-space point-to-point' in selected['move_to']['description']
+    with pytest.raises(online.ToolArgumentsError):
+        online.validate_tool_arguments(
+            {'request_id':'m1','xyz_m':[0.3,0.0,0.1],'rpy_deg':[180,0,0],
+             'speed_percent':10,'timeout_s':60,'observation_id':'live-0001'},
+            selected['move_linear']['inputSchema'],
+        )

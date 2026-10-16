@@ -130,3 +130,44 @@ def test_repeated_source_newest_relation_governs_final():
     assert result['final_state']['sources']['block']['relation']=='right'
     stale=private_grade(goals,transfers,final_state=snap(P1))
     assert stale['goal_success'] and not stale['success']
+
+
+def test_moving_reference_invalidates_old_final_relation_not_historical_step():
+    # block left of cube, then cube moves right of marker. The former
+    # relationship is no longer an asserted terminal requirement.
+    start=dict(P0,cube=(.30,.10,.04))
+    first=dict(start,block=(.18,.10,.04))
+    end=dict(first,cube=(.62,.10,.04),block=(.75,.10,.04))
+    goals=[('pick_place','block','cube','left'),('pick_place','cube','marker','right')]
+    transfers=[carry('block',start,first),carry('cube',first,end)]
+    result=private_grade(goals,transfers,final_state=snap(end))
+    assert result['goal_success'] and result['ordered_success'] and result['success']
+    assert set(result['final_state']['sources'])=={'cube'}
+    assert result['steps'][0]['success']
+    assert result['final_state']['invalidated_relations'][0]['moved_object']=='cube'
+    # Invalidating the relation cannot excuse a missing historical action.
+    missing=private_grade(goals,transfers[1:],final_state=snap(end))
+    assert not missing['goal_success'] and not missing['success']
+    held=private_grade(goals,transfers,final_state=snap(end,['block']))
+    assert not held['success'] and not held['final_state']['all_sources_released']
+
+
+def test_unrelated_move_does_not_invalidate_final_relation():
+    transfers=[carry('block',P0,P1),carry('cube',P1,P2)]
+    result=private_grade([GOAL_BLOCK_LEFT,GOAL_CUBE_RIGHT],transfers,final_state=snap(P2))
+    assert set(result['final_state']['sources'])=={'block','cube'}
+    assert result['final_state']['invalidated_relations']==[]
+    broken=snap(dict(P2,block=(.80,.10,.04)))
+    assert not private_grade([GOAL_BLOCK_LEFT,GOAL_CUBE_RIGHT],transfers,final_state=broken)['success']
+
+
+def test_reference_move_then_reassert_relation_restores_final_check():
+    first=dict(P0,cube=(.30,.10,.04),block=(.18,.10,.04))
+    second=dict(first,cube=(.62,.10,.04))
+    third=dict(second,block=(.50,.10,.04))
+    goals=[('pick_place','block','cube','left'),('pick_place','cube','marker','right'),
+           ('pick_place','block','cube','left')]
+    transfers=[carry('block',P0,first),carry('cube',first,second),carry('block',second,third)]
+    result=private_grade(goals,transfers,final_state=snap(third))
+    assert result['success'] and result['ordered_success']
+    assert set(result['final_state']['sources'])=={'cube','block'}
