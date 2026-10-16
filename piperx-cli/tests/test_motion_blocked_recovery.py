@@ -222,7 +222,7 @@ def test_internal_limits_stay_bounded_and_inside_poll_grace():
     assert 0 < service_module._STALL_WARMUP_S < service_module._STALL_WINDOW_S
     assert service_module._STALL_MIN_PROGRESS_DEG > 0
     assert service_module._STALL_MIN_PROGRESS_M > 0
-    assert set(service_module._BLOCKED_RECOVERY_CODES) == {"execution_timeout", "motion_stalled"}
+    assert set(service_module._BLOCKED_RECOVERY_CODES) == {"execution_timeout", "motion_stalled", "tracking_error"}
 
 
 def test_stalled_joint_move_returns_failed_recoverable_after_confirmed_hold(tmp_path):
@@ -855,5 +855,37 @@ def test_control_mode_transition_is_not_recovered(tmp_path):
         assert job["status"] == "outcome_unknown", job
         assert job["error_code"] == "execution_timeout"
         assert "recoverable" not in job
+    finally:
+        service.close()
+
+
+@pytest.mark.parametrize('unstable', [False, True])
+def test_linear_tracking_error_confirms_hold_before_recovery(tmp_path, monkeypatch, unstable):
+    """A contact-disturbed joint triggers tracking_error, never a replay or success."""
+    short_confirmation(monkeypatch, window=.8)
+    class Disturbed(ScriptedMujoco):
+        def joint_target(self, q):
+            super().joint_target(q)
+            # Physical disturbance while first command is active; not a command replay.
+            if not self.hold_calls:
+                self.drift_deg=.4
+    kin=PiperKinematics([0.,0.,.1425]);backend=Disturbed(q=[0.,20.,-25.,0.,25.,0.])
+    def held(b):
+        b.drift_deg=0.
+        if unstable:b.velocity[0]=3.
+    backend.post_hold=held
+    service=make_service(tmp_path,backend)
+    try:
+        pose=kin.pose(backend.q);target=list(pose['xyz_m']);target[2]+=.01
+        job=wait(service,service.primitive(MoveLinear(xyz_m=target,speed_percent=5,timeout_s=10.),'linear-track-test'))
+        assert len(backend.hold_calls)==1
+        if unstable:
+            assert job['status']=='outcome_unknown' and job['error_code']=='tracking_error'
+            assert not job['stop_result']['confirmed_stopped'] and 'recoverable' not in job
+        else:
+            assert job['status']=='failed' and job['error_code']=='motion_blocked'
+            assert job['original_error_code']=='tracking_error' and job['recoverable']
+            assert job['stop_result']['confirmed_stopped'] and job['after']
+        assert service.active is None
     finally:
         service.close()

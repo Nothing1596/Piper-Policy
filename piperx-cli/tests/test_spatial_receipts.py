@@ -336,3 +336,120 @@ async def test_online_loop_attaches_candidate_overlay_without_evicting_raw_live_
                          and any("CANDIDATE spatial overlay" in p.get("text", "") for p in m["content"] if p.get("type") == "text")]
     assert len(overlay_user_msgs) == 1
     assert not any(p.get("type") == "image_url" for p in overlay_user_msgs[0]["content"])
+
+
+def test_top_surface_isolates_cylinder_from_side_walls_and_lower_neighbor_contamination():
+    kin = PiperKinematics([0.0, 0.0, 0.1425])
+    seed = [0.0, 20.0, -25.0, 0.0, 25.0, 0.0]
+    # Red cylinder top disk at z = -0.10 m, centered at (0.35, -0.05), radius 0.024 m
+    gx, gy = np.meshgrid(np.linspace(-0.024, 0.024, 15), np.linspace(-0.024, 0.024, 15))
+    mask = (gx ** 2 + gy ** 2) <= 0.024 ** 2
+    top_disk = np.column_stack([0.35 + gx[mask], -0.05 + gy[mask], np.full(int(mask.sum()), -0.10)])
+    # Oblique side-wall points on the +Y side of the cylinder (y ~ -0.026 m, z in [-0.19, -0.115])
+    theta = np.linspace(-0.9, 0.9, 20)
+    zs = np.linspace(-0.19, -0.115, 12)
+    tt, zz = np.meshgrid(theta, zs)
+    side_wall = np.column_stack([
+        0.35 + 0.024 * np.sin(tt.ravel()),
+        -0.05 + 0.024 * np.cos(tt.ravel()),
+        zz.ravel(),
+    ])
+    # Adjacent lower green cuboid at (0.42, -0.01), z = -0.17 m (contaminating the ROI)
+    nx, ny = np.meshgrid(np.linspace(0.405, 0.435, 8), np.linspace(-0.025, 0.005, 8))
+    neighbor = np.column_stack([nx.ravel(), ny.ravel(), np.full(nx.size, -0.17)])
+
+    contaminated_pts = np.vstack([top_disk, side_wall, neighbor])
+    summary = scene_geometry._surface_summary(contaminated_pts)
+
+    assert summary["multiple_clusters_detected"] is True
+    assert summary["cluster_count"] >= 2
+    assert summary["dominant_cluster_fraction"] < 0.96
+    assert summary["top_surface_summary"] is not None
+    assert len(summary["sampled_points_base_m"]) <= 200
+
+    # Contradictory top/full geometry cannot silently discard an adjacent object.
+    with pytest.raises(ValueError, match="multiple visible clusters"):
+        grasp_estimate(kin, seed, summary, summary["median_point_m"][:2],
+                       top=-.10, height=.10, view="live-0001", target_hash="contaminated")
+    clean_summary = scene_geometry._surface_summary(np.vstack([top_disk, side_wall]))
+    # A clean cylinder keeps the top centre instead of drifting onto a side wall.
+    grasp = grasp_estimate(
+        kin, seed, clean_summary, clean_summary["median_point_m"][:2],
+        top=-0.10, height=0.10, view="live-0001", target_hash="cyl123",
+    )
+    assert grasp["top_surface_used_for_grasp"] is True
+    assert grasp["orientation_ambiguous"] is True
+    assert grasp["closing_axis_yaw_deg"] == pytest.approx(0.0)
+    assert grasp["poses"]["grasp"]["xyz_m"][0] == pytest.approx(0.35, abs=0.003)
+    assert grasp["poses"]["grasp"]["xyz_m"][1] == pytest.approx(-0.05, abs=0.003)
+
+    # Top placement onto the contaminated cylinder ROI also isolates the cylinder top face
+    source = {
+        "tcp_above_table_m": 0.0125,
+        "observed_bounds_m": {"lower": [0.28, 0.08, -0.20], "upper": [0.32, 0.12, -0.15]},
+        "poses": {"grasp": {"rpy_deg": [180.0, 0.0, 0.0], "xyz_m": [0.30, 0.10, -0.1875]}},
+    }
+    plane = {"normal": [0.0, 0.0, 1.0], "point_on_plane_m": [0.35, -0.05, -0.20]}
+    place = placement_geometry(source, summary, plane, {}, "top", 0.0, 0.02)
+    assert place["reference_top_surface_used"] is True
+    assert place["reference_multiple_clusters_detected"] is True
+    assert place["xyz_m"][0] == pytest.approx(0.35, abs=0.003)
+    assert place["xyz_m"][1] == pytest.approx(-0.05, abs=0.003)
+
+
+def test_elevated_object_grasp_uses_visible_thickness_instead_of_plunging_into_support():
+    kin = PiperKinematics([0.0, 0.0, 0.1425])
+    seed = [0.0, 20.0, -25.0, 0.0, 25.0, 0.0]
+    # Object of thickness ~0.048 m (z in [-0.098, -0.050]) resting on a 0.10 m tall support above table z=-0.20 m
+    xs, ys = np.meshgrid(np.linspace(0.30, 0.34, 12), np.linspace(-0.02, 0.02, 12))
+    zs = np.linspace(-0.098, -0.050, xs.size)
+    pts = np.column_stack([xs.ravel(), ys.ravel(), zs])
+    summary = scene_geometry._surface_summary(pts)
+
+    grasp = grasp_estimate(
+        kin, seed, summary, summary["median_point_m"][:2],
+        top=-0.050, height=0.150, view="live-0001", target_hash="elevated123",
+    )
+    assert grasp["elevated_support_detected"] is True
+    assert grasp["effective_object_height_m"] == pytest.approx(0.048, abs=0.003)
+    assert "appears elevated above the tabletop" in grasp["assumption"]
+    # Grasp Z stays in the upper object (~ -0.0865 m) rather than plunging to -0.1375 m
+    assert grasp["poses"]["grasp"]["xyz_m"][2] > -0.095
+
+
+
+@pytest.mark.parametrize('rotation', [0., 37., -61.])
+def test_top_band_axis_is_checked_against_full_visible_extent(rotation):
+    """Prism regression: a local 38mm strip must not prescribe a 118mm pinch."""
+    class Kin:
+        def solve(self, xyz, rpy, seed):
+            return {'joints_deg':seed, 'position_error_m':0., 'orientation_error_deg':0.}
+    summary = {
+        'median_point_m':[.3,0.,-.17],
+        'observed_bounds_m':{'lower':[.276,-.059,-.19],'upper':[.324,.059,-.15]},
+        'observed_extent_m':[.048*abs(math.cos(math.radians(rotation)))+.118*abs(math.sin(math.radians(rotation))),
+                             .048*abs(math.sin(math.radians(rotation)))+.118*abs(math.cos(math.radians(rotation))),.04],
+        'minor_axis_yaw_deg':rotation, 'major_axis_yaw_deg':rotation+90,
+        'observed_minor_width_m':.048, 'observed_major_span_m':.118,
+        'orientation_ambiguous':False,
+        'top_surface_summary':{
+            'median_point_m':[.3,.01,-.156], 'point_count':377,
+            'observed_extent_m':[.048,.038,.012],
+            'observed_bounds_m':{'lower':[.276,0.,-.162],'upper':[.324,.038,-.15]},
+            'minor_axis_yaw_deg':rotation+85.4, 'major_axis_yaw_deg':rotation-4.6,
+            'observed_minor_width_m':.038, 'observed_major_span_m':.048,
+            'orientation_ambiguous':False,
+        },
+    }
+    value=grasp_estimate(Kin(),[0]*6,summary,[.3,0],-.15,.05,'live-1','test')
+    assert value['closing_axis_yaw_deg']==pytest.approx(rotation)
+    assert value['observed_width_m']==pytest.approx(.048)
+    assert value['poses']['grasp']['xyz_m'][:2]==[.3,0.]
+    assert value['geometry_consistency']['status']=='adjusted_to_visible_extent'
+    assert value['geometry_consistency']['visible_span_at_original_yaw_m']>.118
+    assert not value['top_surface_used_for_grasp'] and not value['collision_checked']
+    # No orientation is feasible when even the full visible narrow axis is too wide.
+    summary['observed_minor_width_m']=.08
+    summary['observed_extent_m']=[.15,.15,.04]
+    with pytest.raises(ValueError,match='gripper capability'):
+        grasp_estimate(Kin(),[0]*6,summary,[.3,0],-.15,.05,'live-1','test')

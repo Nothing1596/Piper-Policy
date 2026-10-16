@@ -51,7 +51,7 @@ _STALL_MIN_PROGRESS_M = 0.0002
 # Original failures that may become motion_blocked after a confirmed hold.
 # Anything else (faults, stale feedback, limits, collisions, cancellation,
 # control-mode changes) keeps its existing unknown/cancellation handling.
-_BLOCKED_RECOVERY_CODES = ("execution_timeout", "motion_stalled")
+_BLOCKED_RECOVERY_CODES = ("execution_timeout", "motion_stalled", "tracking_error")
 
 
 class _ProgressWatch:
@@ -451,6 +451,20 @@ class RobotService(InteractionControls, RuntimeControls):
             sample = self.backend.snapshot()
             self._check(sample, gripper=command.kind == "set_gripper")
             resolved, metadata = resolve_primitive(command, sample.q_deg.copy(), self.settings)
+            if self.backend.name == "mujoco" and command.kind != "set_gripper":
+                # Numerical IK can starve the in-process physics worker. Wait
+                # for an actual post-solve sample, not a relaxed freshness limit
+                # or an invented timestamp. No command has been admitted yet.
+                solved_at = time.monotonic()
+                deadline = solved_at + self.settings.feedback_timeout_s
+                while True:
+                    fresh = self.backend.snapshot()
+                    if fresh.feedback_stamp_s is not None and fresh.feedback_stamp_s > solved_at:
+                        self._check(fresh)
+                        break
+                    if time.monotonic() >= deadline:
+                        raise DomainError("stale_feedback", "Simulation produced no fresh feedback after path planning; no motion is admitted.")
+                    time.sleep(.002)
             for point in metadata.get("waypoints_deg", []):
                 self._check_window(sample, JointMove(joints_deg=point, speed_percent=command.speed_percent,
                                                      timeout_s=command.timeout_s))

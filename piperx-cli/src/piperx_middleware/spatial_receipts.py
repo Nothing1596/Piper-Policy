@@ -127,11 +127,43 @@ def _surface_spans(summary, height=None):
 def grasp_estimate(kin, seed, summary, xy, top, height, view, target_hash, *,
                    measured_tcp_pose=None, sim_time_s=None, captured_at=None):
     """Compute candidate overhead grasp poses and explicit spatial evidence receipt."""
-    ambiguous = bool(summary["orientation_ambiguous"])
-    minor_yaw = float(summary["minor_axis_yaw_deg"])
-    major_yaw = float(summary.get("major_axis_yaw_deg", (minor_yaw + 180.0) % 180.0 - 90.0))
+    top_surf = summary.get("top_surface_summary")
+    obs_ext = summary.get("observed_extent_m") or [
+        float(summary["observed_bounds_m"]["upper"][i] - summary["observed_bounds_m"]["lower"][i])
+        for i in range(3)
+    ]
+    use_top_surf = (
+        isinstance(top_surf, dict)
+        and float(obs_ext[2]) > 0.015
+        and int(top_surf.get("point_count", 0)) >= 8
+        and min(float(top_surf["observed_extent_m"][0]), float(top_surf["observed_extent_m"][1])) >= 0.012
+    )
+    active_surf = top_surf if use_top_surf else summary
+    # A small top band can reverse the apparent short/long axes (e.g. a prism).
+    # Check its pinch direction against the entire visible ROI, not just that band.
+    def visible_span(angle):
+        delta = math.radians(angle - float(summary["minor_axis_yaw_deg"]))
+        pca_span = (abs(math.cos(delta)) * float(summary["observed_minor_width_m"])
+                    + abs(math.sin(delta)) * float(summary.get("observed_major_span_m", max(obs_ext[:2]))))
+        rad = math.radians(angle)
+        axis_span = abs(math.cos(rad))*float(obs_ext[0]) + abs(math.sin(rad))*float(obs_ext[1])
+        return min(pca_span, axis_span)
+
+    original_yaw = 0.0 if active_surf["orientation_ambiguous"] else float(active_surf["minor_axis_yaw_deg"])
+    original_width = float(active_surf["observed_minor_width_m"])
+    projected_width = visible_span(original_yaw)
+    corrected = use_top_surf and projected_width > original_width + 0.010
+    if corrected:
+        if summary.get("multiple_clusters_detected"):
+            raise ValueError("Top-band grasp conflicts with multiple visible clusters; tighten the object region and remeasure")
+        active_surf = summary
+        use_top_surf = False
+    ambiguous = bool(active_surf["orientation_ambiguous"])
+    minor_yaw = float(active_surf["minor_axis_yaw_deg"])
+    major_yaw = float(active_surf.get("major_axis_yaw_deg", (minor_yaw + 180.0) % 180.0 - 90.0))
     yaw = 0.0 if ambiguous else minor_yaw
-    width = summary["observed_minor_width_m"] + 0.010
+    observed_width = max(float(active_surf["observed_minor_width_m"]), visible_span(yaw))
+    width = observed_width + 0.010
     if width > 0.07:
         raise ValueError("Observed closing width plus margin exceeds gripper capability")
     if measured_tcp_pose is None and hasattr(kin, "pose"):
@@ -139,8 +171,27 @@ def grasp_estimate(kin, seed, summary, xy, top, height, view, target_hash, *,
             measured_tcp_pose = kin.pose(seed)
         except Exception:
             measured_tcp_pose = None
-    x, y = xy
-    z = top - height / 2 - 0.0125
+    if (
+        use_top_surf
+        and isinstance(summary.get("median_point_m"), (list, tuple))
+        and isinstance(top_surf.get("median_point_m"), (list, tuple))
+        and np.allclose(xy, summary["median_point_m"][:2], atol=1e-6)
+    ):
+        x, y = float(top_surf["median_point_m"][0]), float(top_surf["median_point_m"][1])
+    else:
+        x, y = float(xy[0]), float(xy[1])
+    lower_z = float(summary["observed_bounds_m"]["lower"][2])
+    upper_z = float(summary["observed_bounds_m"]["upper"][2])
+    visible_z_span = max(0.0, upper_z - lower_z)
+    table_z_est = float(top - height)
+    bottom_above_table_m = float(lower_z - table_z_est)
+    elevated_support_detected = (
+        float(height) > 0.08
+        and bottom_above_table_m > 0.035
+        and 0.012 <= visible_z_span < 0.70 * float(height)
+    )
+    effective_height = max(0.025, visible_z_span) if elevated_support_detected else float(height)
+    z = float(top) - effective_height / 2.0 - 0.0125
     poses = None
     selected_angle = yaw
     for angle in (yaw, yaw + 180, yaw - 180):
@@ -165,6 +216,13 @@ def grasp_estimate(kin, seed, summary, xy, top, height, view, target_hash, *,
             poses = None
     if poses is None:
         raise ValueError("No legal grasp/approach IK; reobserve or select a different region")
+    assumption = (
+        f"Selected object appears elevated above the tabletop (bottom_above_table_m={bottom_above_table_m:.3f}m); "
+        f"grasp depth uses visible object thickness ({effective_height:.3f}m) instead of full table-to-top height ({float(height):.3f}m). "
+        "Verify support clearance before descending."
+        if elevated_support_detected
+        else "Selected upright object is resting on this tabletop; occluded geometry is not measured"
+    )
     result = {
         "status": "ok",
         "observation_id": view,
@@ -172,9 +230,20 @@ def grasp_estimate(kin, seed, summary, xy, top, height, view, target_hash, *,
         "poses": poses,
         "opening_width_m": 0.07,
         "observed_height_m": height,
-        "observed_width_m": summary["observed_minor_width_m"],
-        "observed_bounds_m": summary["observed_bounds_m"],
+        "effective_object_height_m": effective_height,
+        "elevated_support_detected": elevated_support_detected,
+        "top_surface_used_for_grasp": use_top_surf,
+        "observed_width_m": observed_width,
+        "observed_bounds_m": active_surf["observed_bounds_m"] if use_top_surf else summary["observed_bounds_m"],
         "observed_surface_spans_m": _surface_spans(summary, height=height),
+        "geometry_consistency": {
+            "status": "adjusted_to_visible_extent" if corrected else "consistent_with_visible_extent",
+            "original_yaw_deg": original_yaw,
+            "original_width_m": original_width,
+            "visible_span_at_original_yaw_m": projected_width,
+            "visible_span_at_selected_yaw_m": visible_span(yaw),
+            "scope": "Visible PCA envelope only, not hidden shape or collision clearance. Clean ROI/one cluster does not prove graspability.",
+        },
         "closing_axis_yaw_deg": selected_angle,
         "object_minor_axis_yaw_deg": minor_yaw,
         "object_major_axis_yaw_deg": major_yaw,
@@ -184,9 +253,9 @@ def grasp_estimate(kin, seed, summary, xy, top, height, view, target_hash, *,
             "aligned with the visible PCA minor axis (or 0 deg when orientation_ambiguous=True); "
             "object_major_axis_yaw_deg is the perpendicular visible elongation axis."
         ),
-        "tcp_above_table_m": height / 2 - 0.0125,
+        "tcp_above_table_m": effective_height / 2.0 - 0.0125,
         "geometry_source": "calibrated current RGB-D; ROI above measured support plane",
-        "assumption": "Selected upright object is resting on this tabletop; occluded geometry is not measured",
+        "assumption": assumption,
         "robot_moved": False,
         "collision_checked": False,
     }
@@ -208,8 +277,30 @@ def placement_geometry(source, summary, plane, camera, relation, yaw_deg, cleara
         raise ValueError("Unknown image relation")
     if clearance is not None and (not math.isfinite(clearance) or not 0 <= clearance <= 0.10):
         raise ValueError("Invalid placement clearance")
-    lower = np.asarray(summary["observed_bounds_m"]["lower"])
-    upper = np.asarray(summary["observed_bounds_m"]["upper"])
+    raw_lower = np.asarray(summary["observed_bounds_m"]["lower"], dtype=np.float64)
+    raw_upper = np.asarray(summary["observed_bounds_m"]["upper"], dtype=np.float64)
+    top_surf = summary.get("top_surface_summary")
+    ref_top_used = (
+        relation == "top"
+        and isinstance(top_surf, dict)
+        and int(top_surf.get("point_count", 0)) >= 8
+        and min(float(top_surf["observed_extent_m"][0]), float(top_surf["observed_extent_m"][1])) >= 0.012
+    )
+    ref_dom_used = (
+        not ref_top_used
+        and bool(summary.get("multiple_clusters_detected"))
+        and isinstance(summary.get("dominant_cluster_bounds_m"), dict)
+    )
+    if ref_top_used:
+        lower = np.asarray(top_surf["observed_bounds_m"]["lower"], dtype=np.float64)
+        upper = np.asarray(top_surf["observed_bounds_m"]["upper"], dtype=np.float64)
+        upper[2] = float(raw_upper[2])
+    elif ref_dom_used:
+        lower = np.asarray(summary["dominant_cluster_bounds_m"]["lower"], dtype=np.float64)
+        upper = np.asarray(summary["dominant_cluster_bounds_m"]["upper"], dtype=np.float64)
+    else:
+        lower = raw_lower
+        upper = raw_upper
     centre = (lower + upper) / 2
     normal = np.asarray(plane["normal"])
     origin = np.asarray(plane["point_on_plane_m"])
@@ -272,6 +363,9 @@ def placement_geometry(source, summary, plane, camera, relation, yaw_deg, cleara
         "assumed_source_yaw_change_deg": math.degrees(angle),
         "target_semantics": "base-frame TCP",
         "support_height_m": support,
+        "reference_top_surface_used": ref_top_used,
+        "reference_dominant_cluster_used": ref_dom_used,
+        "reference_multiple_clusters_detected": bool(summary.get("multiple_clusters_detected", False)),
         "reference_observed_surface_spans_m": _surface_spans(summary),
         "scope": "Observed envelopes, assumed upright held source and its recorded TCP offset. Slip, hidden geometry and collision clearance are not certified.",
     }
@@ -399,6 +493,7 @@ def render_candidate_overlay(
             draw.line(points + [points[0]], fill=color, width=2)
             draw.text((points[0][0]+3, max(28, points[0][1]-12)), label, fill=color)
 
+    drew_surface_pts = False
     if surface_points_base_m is not None:
         pts = np.asarray(surface_points_base_m, dtype=np.float64)
         if pts.ndim == 2 and pts.shape[1] == 3 and len(pts) > 0:
@@ -412,7 +507,8 @@ def render_candidate_overlay(
                     draw.ellipse([u - 1, v - 1, u + 1, v + 1], fill=(0, 230, 118, 190))
                     valid_count += 1
             projected_meta["visible_surface_point_count"] = valid_count
-    elif isinstance(observed_bounds_m, dict) and "lower" in observed_bounds_m and "upper" in observed_bounds_m:
+            drew_surface_pts = True
+    if isinstance(observed_bounds_m, dict) and "lower" in observed_bounds_m and "upper" in observed_bounds_m:
         corners = _bounds_corners(observed_bounds_m)
         proj_corners = project_base_to_pixel(corners, intr, transform)
         edges = [
@@ -425,7 +521,8 @@ def render_candidate_overlay(
                 p1 = proj_corners[a]["pixel_int"]
                 p2 = proj_corners[b]["pixel_int"]
                 draw.line([p1[0], p1[1], p2[0], p2[1]], fill=(0, 230, 118, 170), width=1)
-        projected_meta["visible_surface_point_count"] = sum(1 for c in proj_corners if c["in_front"])
+        if not drew_surface_pts:
+            projected_meta["visible_surface_point_count"] = sum(1 for c in proj_corners if c["in_front"])
 
     if median_point_base_m is not None:
         med_proj = project_base_to_pixel(median_point_base_m, intr, transform)

@@ -511,7 +511,11 @@ def test_robot_service_integration(tmp_path):
         final_q = job["after"]["q_deg"]
         assert max(abs(a - b) for a, b in zip(final_q, target)) < 0.15
 
-        # Stop semantics: holds current position
+        # The worker publishes reached-target status before final journal cleanup.
+        # Wait for its exit before asserting the idle stop path, not cancellation.
+        service.thread.join(timeout=2)
+        assert not service.thread.is_alive()
+        # Stop semantics after the completed action.
         stop_res = service.stop()
         assert stop_res["status"] in ("idle", "hold_requested")
     finally:

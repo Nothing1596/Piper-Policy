@@ -786,28 +786,117 @@ def _accumulate_region(root, task_id, task, request):
     }
 
 
+def _cluster_diagnostics(points, cell_size_m=0.012):
+    """Deterministic 26-neighbour 3D voxel-grid connected components without SciPy."""
+    if len(points) == 0:
+        return 0, 0.0, False, np.empty((0,), dtype=np.int64)
+    cells = np.floor(points / cell_size_m).astype(np.int64)
+    cell_map = {}
+    for idx, cell in enumerate(map(tuple, cells)):
+        cell_map.setdefault(cell, []).append(idx)
+    visited = set()
+    components = []
+    offsets = [(dx, dy, dz) for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)
+               if (dx, dy, dz) != (0, 0, 0)]
+    for start in cell_map:
+        if start in visited:
+            continue
+        visited.add(start)
+        queue = [start]
+        member_indices = []
+        while queue:
+            cur = queue.pop()
+            member_indices.extend(cell_map[cur])
+            cx, cy, cz = cur
+            for dx, dy, dz in offsets:
+                nb = (cx + dx, cy + dy, cz + dz)
+                if nb in cell_map and nb not in visited:
+                    visited.add(nb)
+                    queue.append(nb)
+        components.append(np.asarray(sorted(member_indices), dtype=np.int64))
+    components.sort(key=len, reverse=True)
+    min_sig = max(3, int(math.ceil(0.02 * len(points))))
+    sig = [c for c in components if len(c) >= min_sig] or components[:1]
+    dom = components[0]
+    return len(sig), float(len(dom) / len(points)), bool(len(sig) > 1), dom
+
+
+def _xy_pca(points):
+    xy = points[:, :2] - np.mean(points[:, :2], axis=0)
+    covariance = xy.T @ xy / max(1, len(points))
+    eigenvalues, axes = np.linalg.eigh(covariance)
+    minor = axes[:, 0]
+    major = axes[:, 1]
+    projected_minor = xy @ minor
+    projected_major = xy @ major
+    minor_yaw = float((math.degrees(math.atan2(minor[1], minor[0])) + 90) % 180 - 90)
+    major_yaw = float((math.degrees(math.atan2(major[1], major[0])) + 90) % 180 - 90)
+    return {
+        'minor_axis_xy': minor.tolist(),
+        'minor_axis_yaw_deg': minor_yaw,
+        'observed_minor_width_m': float(np.quantile(projected_minor, .98) - np.quantile(projected_minor, .02)),
+        'major_axis_xy': major.tolist(),
+        'major_axis_yaw_deg': major_yaw,
+        'observed_major_span_m': float(np.quantile(projected_major, .98) - np.quantile(projected_major, .02)),
+        'orientation_ambiguous': bool(eigenvalues[1] <= 1.2 * eigenvalues[0] + 1e-12),
+    }
+
+
 def _surface_summary(points):
     """Compact measured ROI geometry, never a full hidden-object model."""
-    lower,upper=np.quantile(points,[.02,.98],axis=0)
-    center=np.median(points,axis=0)
-    xy=points[:,:2]-np.mean(points[:,:2],axis=0)
-    covariance=xy.T@xy/max(1,len(points))
-    eigenvalues,axes=np.linalg.eigh(covariance)
-    minor=axes[:,0];major=axes[:,1]
-    projected_minor=xy@minor;projected_major=xy@major
-    minor_yaw=float((math.degrees(math.atan2(minor[1],minor[0]))+90)%180-90)
-    major_yaw=float((math.degrees(math.atan2(major[1],major[0]))+90)%180-90)
-    return {'frame':'base','units':'m','median_point_m':center.tolist(),
-            'observed_bounds_m':{'lower':lower.tolist(),'upper':upper.tolist()},
-            'observed_extent_m':(upper-lower).tolist(),
-            'minor_axis_xy':minor.tolist(),
-            'minor_axis_yaw_deg':minor_yaw,
-            'observed_minor_width_m':float(np.quantile(projected_minor,.98)-np.quantile(projected_minor,.02)),
-            'major_axis_xy':major.tolist(),
-            'major_axis_yaw_deg':major_yaw,
-            'observed_major_span_m':float(np.quantile(projected_major,.98)-np.quantile(projected_major,.02)),
-            'orientation_ambiguous':bool(eigenvalues[1]<=1.2*eigenvalues[0]+1e-12),
-            'scope':'Visible ROI surface points only. Background and occlusion affect this summary; not full object dimensions or grasp feasibility.'}
+    lower, upper = np.quantile(points, [.02, .98], axis=0)
+    center = np.median(points, axis=0)
+    pca = _xy_pca(points)
+    cluster_count, dom_fraction, multi_clusters, dom_idx = _cluster_diagnostics(points)
+    dom_pts = points[dom_idx] if len(dom_idx) else points
+    dom_lower, dom_upper = np.quantile(dom_pts, [.02, .98], axis=0)
+
+    top_band_m = 0.012
+    top_mask = (points[:, 2] >= upper[2] - top_band_m) & (points[:, 2] <= upper[2] + 0.006)
+    top_pts = points[top_mask]
+    if len(top_pts) >= 5:
+        _, _, _, top_dom_idx = _cluster_diagnostics(top_pts)
+        if len(top_dom_idx) >= 5:
+            top_pts = top_pts[top_dom_idx]
+    top_summary = None
+    if len(top_pts) >= 5:
+        top_lo, top_hi = np.quantile(top_pts, [.02, .98], axis=0)
+        top_med = np.median(top_pts, axis=0)
+        top_pca = _xy_pca(top_pts)
+        top_summary = {
+            'band_thickness_m': top_band_m,
+            'point_count': int(len(top_pts)),
+            'point_fraction': float(len(top_pts) / len(points)),
+            'median_point_m': top_med.tolist(),
+            'observed_bounds_m': {'lower': top_lo.tolist(), 'upper': top_hi.tolist()},
+            'observed_extent_m': (top_hi - top_lo).tolist(),
+            **top_pca,
+        }
+        # When significant vertical relief is present (oblique side wall on a tall
+        # cylinder/block or a lower adjacent object), an isotropic top face must
+        # not inherit a false elongation axis from camera-facing side-wall pixels.
+        if (upper[2] - lower[2]) > 0.015 and len(top_pts) >= max(8, int(0.08 * len(points))):
+            if top_pca['orientation_ambiguous']:
+                pca['orientation_ambiguous'] = True
+
+    step = max(1, len(points) // 200)
+    sampled = np.round(points[::step][:200], 5).tolist()
+    return {
+        'frame': 'base',
+        'units': 'm',
+        'median_point_m': center.tolist(),
+        'observed_bounds_m': {'lower': lower.tolist(), 'upper': upper.tolist()},
+        'observed_extent_m': (upper - lower).tolist(),
+        **pca,
+        'cluster_count': cluster_count,
+        'dominant_cluster_fraction': dom_fraction,
+        'multiple_clusters_detected': multi_clusters,
+        'dominant_cluster_bounds_m': {'lower': dom_lower.tolist(), 'upper': dom_upper.tolist()},
+        'dominant_cluster_median_point_m': np.median(dom_pts, axis=0).tolist(),
+        'top_surface_summary': top_summary,
+        'sampled_points_base_m': sampled,
+        'scope': 'Visible ROI surface points only. Background and occlusion affect this summary; not full object dimensions or grasp feasibility.',
+    }
 
 
 # --------------------------------------------------------------------------- #
