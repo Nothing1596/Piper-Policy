@@ -368,6 +368,7 @@ async def run_turn(
     invoke: Callable[[str, dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]],
     emit: Callable[[str], None] = print,
     image_inputs: Callable[[dict], list] | None = None,
+    refresh_context: Callable[[list], Coroutine[Any, Any, None]] | None = None,
 ) -> str:
     """Runs a single user turn with OpenAI-compatible function calling loop (bounded to 12 rounds)."""
     endpoint = validate_endpoint(config.endpoint)
@@ -385,6 +386,8 @@ async def run_turn(
 
     try:
         for _ in range(12):
+            if refresh_context:
+                await refresh_context(messages)
             payload: dict[str, Any] = {
                 "model": config.model,
                 "messages": messages,

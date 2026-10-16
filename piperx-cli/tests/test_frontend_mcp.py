@@ -36,6 +36,14 @@ async def test_actual_frontend_mcp_robot_and_demo_pixels_same_session(tmp_path):
             measured=await session.call_tool('scene_query',{'operation':'surface_point',
                 'observation_path':observation,'pixel':[20,20]})
             assert not measured.isError and measured.structuredContent['point_m']==[0.,0.,1.]
+            for _ in range(2):
+                repeated=await session.call_tool('scene_query',{'operation':'surface_point',
+                    'observation_path':observation,'pixel':[20,20]})
+            assert repeated.structuredContent['harness_review']['state']=='needs_review'
+            updated=await session.call_tool('task_plan',{'operation':'update',
+                'task_id':task.structuredContent['task_id'],'expected_version':task.structuredContent['version'],
+                'changes':{'current_stage':'verify'}})
+            assert not updated.isError and updated.structuredContent['harness_review']['state']=='needs_review'
             guide=await session.call_tool('task_plan',{'operation':'guide'})
             assert not guide.isError and 'observe-and-plan' in guide.structuredContent['content']
             ref=await session.call_tool('demo_reference',{})

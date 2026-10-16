@@ -940,6 +940,9 @@ class ConsoleController:
             prepare = getattr(self, 'prepare_model_context', None)
             if prepare:
                 await prepare(self.messages)
+            context_options = {}
+            if callable(getattr(self,'refresh_harness_context',None)):
+                context_options['refresh_context'] = self.refresh_harness_context
             reply = await run_turn(
                 config=self.model_config,
                 messages=self.messages,
@@ -947,6 +950,7 @@ class ConsoleController:
                 invoke=self.invoke_tool,
                 emit=self.emit,
                 image_inputs=getattr(self, 'image_inputs', None),
+                **context_options,
             )
             if reply:
                 self.emit(f"\nAssistant: {reply}\n")

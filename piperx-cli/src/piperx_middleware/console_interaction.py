@@ -11,6 +11,7 @@ import json
 import secrets
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Callable
 
@@ -111,6 +112,11 @@ class InteractiveConsoleController(ConsoleController):
         self._demo = None
         self._plans = None
         self._scene = None
+        from .behavior_monitor import BehaviorMonitor
+        self._behavior = BehaviorMonitor()
+        self._behavior_session = uuid.uuid4().hex
+        self._behavior_error = None
+        self._behavior_root = self.root
 
         if operator_call is not None:
             self.operator_call = operator_call
@@ -374,6 +380,11 @@ class InteractiveConsoleController(ConsoleController):
                 result = self.plans().resume(parts[1])
             else:
                 raise ValueError('Usage: /plan | /plan new GOAL | /plan resume TASK_ID')
+            try:
+                self._behavior_scope()
+                self._behavior.record_plan(result)
+            except Exception:
+                self._behavior_error = 'Behavior diagnostics unavailable; plan operation retained.'
             self.emit(json.dumps(result, ensure_ascii=False, indent=2))
         except Exception as exc:
             self.emit('Plan: '+str(exc))
@@ -491,7 +502,59 @@ class InteractiveConsoleController(ConsoleController):
         cameras = CAMERA_TOOLS if self.mode == 'real' and self.target == 'local' else (CAMERA_TOOLS[:1] if self.mode == 'simulation' else [])
         return super().available_tools() + [DEMO_TOOL,WATCH_TOOL,TASK_PLAN_TOOL,SCENE_TOOL] + cameras
 
+    def _save_behavior(self):
+        # Session audit is front-end state, never an executor journal or a
+        # restart/replay mechanism. Do not let a disk error obscure an action.
+        try:
+            path = self.root/'harness'/f'{self._behavior_session}.jsonl'
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open('a', encoding='utf-8') as log:
+                log.write(json.dumps({'time_s':time.time(),'sequence':self._behavior.sequence,
+                                      **self._behavior.snapshot()}, ensure_ascii=False)+'\n')
+        except OSError:
+            self._behavior_error = 'Behavior audit unavailable; original tool outcome retained.'
+
+    def _behavior_scope(self):
+        if self.root != self._behavior_root:
+            from .behavior_monitor import BehaviorMonitor
+            self._behavior = BehaviorMonitor()
+            self._behavior_root = self.root
+            self._behavior_session = uuid.uuid4().hex
+            self._behavior_error = None
+
+    async def refresh_harness_context(self, messages):
+        self._behavior_scope()
+        plan = self.current_plan()
+        try:
+            self._behavior.record_plan(plan)
+            review = self._behavior.snapshot()
+        except Exception:
+            review = {'state':'unavailable','message':'Behavior diagnostics unavailable; current plan retained.'}
+        marker = 'CURRENT Piper harness context: '
+        messages[:] = [m for m in messages if not (m.get('role')=='user'
+            and isinstance(m.get('content'),str) and m['content'].startswith(marker))]
+        messages.append({'role':'user','content':marker+json.dumps(
+            {'current_plan':plan,'harness_review':review},ensure_ascii=False)})
+
     async def invoke_tool(self, name, args):
+        # Shared by native console, JSONL and MCP: record a result once here,
+        # not again in each transport. No extra robot/camera query is issued.
+        self._behavior_scope()
+        result = await self._invoke_tool(name, args)
+        if isinstance(result,dict):
+            try:
+                self._behavior.record_result(name,args,result)
+                self._save_behavior()
+                result = dict(result, harness_review=self._behavior.snapshot())
+                if self._behavior_error:result['harness_review']['audit_error']=self._behavior_error
+            except Exception:
+                # Diagnostics cannot turn a known execution into an exception
+                # that would encourage an unsafe retry or hide its real ID.
+                result = dict(result,harness_review={'state':'unavailable',
+                    'message':'Behavior diagnostics failed; original tool outcome retained.'})
+        return result
+
+    async def _invoke_tool(self, name, args):
         if name in ('task_plan','scene_query'):
             try:
                 from jsonschema import validate
