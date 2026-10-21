@@ -1,0 +1,148 @@
+{
+  "checked_date": "2026-10-21",
+  "timezone": "Asia/Shanghai",
+  "repository": "https://github.com/Nothing1596/Piper-Policy",
+  "local_HEAD": "09256a50935bfc237f7dd737b718dffe22e3d5e0",
+  "remote_main": "09256a50935bfc237f7dd737b718dffe22e3d5e0",
+  "local_HEAD_matches_remote_main": true,
+  "branches": {
+    "codex/single-terminal": "af3e9cf245954b476156610c38d81177f044e6eb",
+    "experiment/derivation": "9f12a69604d71c461dfb78d5319bc51b0b1bfb57",
+    "feat/gpt-policy-windows-sim-baseline": "77b4c1073e93af619ec44937722d9031d72efbe0",
+    "main": "09256a50935bfc237f7dd737b718dffe22e3d5e0"
+  },
+  "releases": [
+    {
+      "tag": "robot-v0.7.1",
+      "published_at": "2026-09-29T08:02:26Z",
+      "url": "https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.7.1",
+      "assets": [
+        {
+          "name": "piper-robot-0.7.1-interactive.zip",
+          "bytes": 19612751,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/robot-v0.7.1/piper-robot-0.7.1-interactive.zip"
+        },
+        {
+          "name": "piper-robot-0.7.1-interactive.zip.sha256",
+          "bytes": 100,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/robot-v0.7.1/piper-robot-0.7.1-interactive.zip.sha256"
+        },
+        {
+          "name": "piperx_middleware-0.7.1-py3-none-any.whl",
+          "bytes": 9958551,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/robot-v0.7.1/piperx_middleware-0.7.1-py3-none-any.whl"
+        },
+        {
+          "name": "piperx_middleware-0.7.1-py3-none-any.whl.sha256",
+          "bytes": 107,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/robot-v0.7.1/piperx_middleware-0.7.1-py3-none-any.whl.sha256"
+        }
+      ]
+    },
+    {
+      "tag": "v0.2.1",
+      "published_at": "2026-09-27T07:47:24Z",
+      "url": "https://github.com/Nothing1596/Piper-Policy/releases/tag/v0.2.1",
+      "assets": [
+        {
+          "name": "piper-combined-cli-0.2.1-win64-py312.zip",
+          "bytes": 219458415,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/v0.2.1/piper-combined-cli-0.2.1-win64-py312.zip"
+        },
+        {
+          "name": "SHA256SUMS.txt",
+          "bytes": 202,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/v0.2.1/SHA256SUMS.txt"
+        },
+        {
+          "name": "ultralytics-8.4.163.tar.gz",
+          "bytes": 1239532,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/v0.2.1/ultralytics-8.4.163.tar.gz"
+        }
+      ]
+    },
+    {
+      "tag": "video-v0.3.0",
+      "published_at": "2026-09-27T08:46:55Z",
+      "url": "https://github.com/Nothing1596/Piper-Policy/releases/tag/video-v0.3.0",
+      "assets": [
+        {
+          "name": "piper-video-0.3.0-win64-py312.zip",
+          "bytes": 184671198,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/video-v0.3.0/piper-video-0.3.0-win64-py312.zip"
+        },
+        {
+          "name": "ultralytics-8.4.163.tar.gz",
+          "bytes": 1239532,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/video-v0.3.0/ultralytics-8.4.163.tar.gz"
+        },
+        {
+          "name": "video-SHA256SUMS.txt",
+          "bytes": 101,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/video-v0.3.0/video-SHA256SUMS.txt"
+        }
+      ]
+    },
+    {
+      "tag": "robot-v0.6.1",
+      "published_at": "2026-09-27T09:12:45Z",
+      "url": "https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.6.1",
+      "assets": [
+        {
+          "name": "piperx_middleware-0.6.1-py3-none-any.whl",
+          "bytes": 9901150,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/robot-v0.6.1/piperx_middleware-0.6.1-py3-none-any.whl"
+        },
+        {
+          "name": "SHA256SUMS.txt",
+          "bytes": 108,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/robot-v0.6.1/SHA256SUMS.txt"
+        }
+      ]
+    },
+    {
+      "tag": "robot-v0.6.0",
+      "published_at": "2026-09-27T08:46:18Z",
+      "url": "https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.6.0",
+      "assets": [
+        {
+          "name": "piper-robot-0.6.0-win64-py312.zip",
+          "bytes": 104499678,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/robot-v0.6.0/piper-robot-0.6.0-win64-py312.zip"
+        },
+        {
+          "name": "robot-SHA256SUMS.txt",
+          "bytes": 101,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/robot-v0.6.0/robot-SHA256SUMS.txt"
+        }
+      ]
+    },
+    {
+      "tag": "installer-v1",
+      "published_at": "2026-09-27T08:59:55Z",
+      "url": "https://github.com/Nothing1596/Piper-Policy/releases/tag/installer-v1",
+      "assets": [
+        {
+          "name": "piper-one-click-installer-v1.zip",
+          "bytes": 7092,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/installer-v1/piper-one-click-installer-v1.zip"
+        },
+        {
+          "name": "SHA256SUMS.txt",
+          "bytes": 100,
+          "url": "https://github.com/Nothing1596/Piper-Policy/releases/download/installer-v1/SHA256SUMS.txt"
+        }
+      ]
+    }
+  ],
+  "uncommitted_before_documentation": [
+    "gpt.md",
+    "docs/implementation/local-moe-context.zh.md",
+    "tools/tests/test_token_context.py",
+    "tools/token_context.py"
+  ],
+  "independent_seed_interface_in_repository": false,
+  "documentation_changes_pushed": false,
+  "release_created": false,
+  "snapshot_scope": "Initial read-only audit before user-authorized staged pushes/releases; not current live status"
+}

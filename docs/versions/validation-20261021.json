@@ -1,0 +1,19 @@
+{
+  "checked_date": "2026-10-21",
+  "scope": "documentation parser/schema/link checks only; not task, simulation, installation or hardware acceptance",
+  "checks": {
+    "markdown_files": 15,
+    "local_links": 55,
+    "manual_examples": 10,
+    "watch_examples": 4,
+    "observe_examples": 4,
+    "jsonl_examples": 5
+  },
+  "CLI_help_entrypoints_passed": 4,
+  "robot_HTTP_IO_calls": 0,
+  "errors": 0,
+  "git_diff_check": "passed",
+  "initial_link_check": "promised validation page not yet created; added and checked again",
+  "no_product_code_changes": true,
+  "no_push_or_release": true
+}

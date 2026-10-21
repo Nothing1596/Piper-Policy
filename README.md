@@ -1,6 +1,8 @@
 # Piper Policy
 
-当前下位机版本 **[0.7.1](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.7.1)**。推荐入口 `piper-robot`；`piperx` 和脚本入口继续兼容。[安装步骤](docs/ROBOT-GUIDE.zh.md) · [本版变化](docs/ROBOT-RELEASE-0.7.1.md)。
+当前公开下位机版本 **[0.7.1](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.7.1)**。推荐入口 `piper-robot`；`piperx` 和脚本入口继续兼容。[安装步骤](docs/ROBOT-GUIDE.zh.md) · [本版变化](docs/ROBOT-RELEASE-0.7.1.md)。
+
+**[各版本详细功能与使用说明](docs/versions/README.zh.md)**：覆盖六个正式发布项、0.7.2.dev1–dev4、已推送源码、溯源分支及未合并工作。正式包、开发源码和本地研究交付分别标明，安装方法不要跨版本混用。
 
 ```sh
 piper-robot
