@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import tomllib
 import zipfile
 
 
@@ -17,9 +18,20 @@ def main():
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--video-wheel',type=Path,help='Optional independent piper-video wheel for demonstration integration')
     parser.add_argument('--detector-onnx',type=Path,help='Optional detector with adjacent SOURCE.json and LICENSE')
+    parser.add_argument('--source-commit',help='Exact 40-character Git commit used for the source archive')
     args=parser.parse_args()
     repo=Path(__file__).resolve().parents[1]
     version=args.wheel.name.split('-')[1]
+    source_version=tomllib.loads((repo/'piperx-cli/pyproject.toml').read_text())['project']['version']
+    if version!=source_version:
+        raise ValueError('Robot wheel and source versions differ')
+    if args.video_wheel:
+        video_version=args.video_wheel.name.split('-')[1]
+        expected=tomllib.loads((repo/'piper-lab/pyproject.toml').read_text())['project']['version']
+        if video_version!=expected:
+            raise ValueError('Video wheel and source versions differ')
+    if args.source_commit and (len(args.source_commit)!=40 or any(c not in '0123456789abcdef' for c in args.source_commit)):
+        raise ValueError('source-commit must be an exact lowercase Git SHA')
     name=f'piper-robot-{version}-interactive'
     root=args.output/name
     root.mkdir(parents=True,exist_ok=False)
@@ -36,8 +48,14 @@ def main():
     source.parent.mkdir()
     shutil.copytree(repo/'piperx-cli',source,ignore=shutil.ignore_patterns(
         '__pycache__','.pytest_cache','*.egg-info','build','dist','.venv*','*.token','*.sqlite3','*.log'))
+    if args.video_wheel:
+        shutil.copytree(repo/'piper-lab',root/'source'/'piper-lab',ignore=shutil.ignore_patterns(
+            '__pycache__','.pytest_cache','*.egg-info','build','dist','.venv*','*.token','*.sqlite3','*.log'))
+    # Keep the canonical tree so links in the full version guides still resolve.
+    shutil.copytree(repo/'docs',root/'docs')
     shutil.copytree(repo/'docs'/'implementation',root/'implementation')
-    shutil.copy2(repo/'docs'/'ROBOT-INTERACTIVE.zh.md',root/'README.zh.md')
+    shutil.copy2(repo/'docs'/'ROBOT-GUIDE.zh.md',root/'README.zh.md')
+    shutil.copy2(repo/'docs'/'ROBOT-GUIDE.zh.md',root/'README.md')
     shutil.copy2(repo/'docs'/'ROBOT-GUIDE.en.md',root/'README.en.md')
     for doc in ('ONE-TASK-DEMO.zh.md', 'ROBOT-GUIDE.zh.md', 'ROBOT-GUIDE.en.md',
                 'ROBOT-INTERACTIVE.zh.md', 'ROBOT-CLI-REFERENCE.md',
@@ -47,6 +65,13 @@ def main():
         if (repo/'docs'/doc).exists():shutil.copy2(repo/'docs'/doc,root/doc)
     shutil.copy2(repo/'gpt.md',root/'source'/'gpt.md')
     shutil.copy2(repo/'tools/parallels_mcp.py',root/'parallels_mcp.py')
+    wheels=[args.wheel]+([args.video_wheel] if args.video_wheel else [])
+    (root/'BUILD-INFO.json').write_text(json.dumps({
+        'source_commit':args.source_commit,'robot_version':version,
+        'video_version':args.video_wheel.name.split('-')[1] if args.video_wheel else None,
+        'installation':'downloads platform dependencies; not an offline bundle',
+        'wheels':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in wheels},
+        'hardware_acceptance':False},indent=2)+'\n',encoding='utf-8')
     if (repo/'LICENSE').exists():shutil.copy2(repo/'LICENSE',root/'LICENSE')
     # An isolated venv; never edits an existing installation or robot profile.
     (root/'install.py').write_text('''"""Install into this kit's .venv; downloads platform dependencies."""
@@ -83,7 +108,8 @@ print('Installed. Launch piper-robot.cmd (Windows) or ./piper-robot (macOS/Linux
     (root/'Piper-Robot.command').chmod(0o755)
     (root/'Setup.command').write_text('#!/bin/sh\nTASK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec python3 "$TASK_DIR/install.py"\n')
     (root/'Setup.command').chmod(0o755)
-    (root/'INSTALL.txt').write_text('''安装：需要 Python 3.11+；Windows CANDO 使用 x64 Python（WOA 的 x64 模拟）。
+    minimum='3.12+' if args.video_wheel else '3.11+'
+    (root/'INSTALL.txt').write_text(f'''安装：本包需要 Python {minimum}；Windows CANDO 使用 x64 Python（WOA 的 x64 模拟）。
 首次安装下载依赖，需要网络。这不是离线包，不包含厂商 CAN 驱动或 SDK。
 Windows：在包目录运行 py -3 install.py，随后 piper-robot.cmd。
 macOS/Linux：python3 install.py，随后 ./piper-robot。
@@ -91,7 +117,8 @@ macOS/Linux：python3 install.py，随后 ./piper-robot。
 安装和 --help 不打开 CAN。请先选择仿真验证。真机连接仍需厂商驱动、SDK 和真实反馈。
 升级：退出旧前端/执行器，解压到新目录，不覆盖正在运行的旧包或配置。
 用户配置不在发行包中；首次运行按独立模式/目标迁移，保留限制。
-完整操作说明 README.zh.md / README.en.md；单次任务演示 ONE-TASK-DEMO.zh.md；验证范围 implementation/validation.md。
+完整操作说明 README.zh.md / README.en.md；版本功能导航 docs/versions/README.zh.md。
+单次任务演示 ONE-TASK-DEMO.zh.md；本版发布与验证范围 docs/ROBOT-RELEASE-{version}.md。
 ''',encoding='utf-8')
     manifest=[{'path':p.relative_to(root).as_posix(),'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
               for p in sorted(root.rglob('*')) if p.is_file()]

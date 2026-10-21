@@ -1,6 +1,6 @@
 # Piper Policy
 
-当前公开下位机版本 **[0.7.1](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.7.1)**。推荐入口 `piper-robot`；`piperx` 和脚本入口继续兼容。[安装步骤](docs/ROBOT-GUIDE.zh.md) · [本版变化](docs/ROBOT-RELEASE-0.7.1.md)。
+当前公开下位机版本 **[0.7.2](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.7.2)**。推荐入口 `piper-robot`；`piperx` 和脚本入口继续兼容。[安装步骤](docs/ROBOT-GUIDE.zh.md) · [本版变化](docs/ROBOT-RELEASE-0.7.2.md)。
 
 **[各版本详细功能与使用说明](docs/versions/README.zh.md)**：覆盖六个正式发布项、0.7.2.dev1–dev4、已推送源码、溯源分支及未合并工作。正式包、开发源码和本地研究交付分别标明，安装方法不要跨版本混用。
 
@@ -20,14 +20,14 @@ piper-robot
 
 [无需 Codex：DeepSeek API 配置步骤（下位机 0.6.1 更新）](docs/DEEPSEEK-SETUP.zh.md)
 
-**下位机 0.7.1 安装：** 先准备 Python 3.11+，解压后 Windows 运行 `Setup.cmd`，macOS/Linux 运行 `python3 install.py`。安装时联网下载依赖；不自动安装 Python 或注册 PATH。随后使用包内 `piper-robot.cmd` / `./piper-robot`。[旧包的一键安装补充说明](docs/ONE-CLICK-INSTALL.md) 仅适用于 video 0.3.0 / robot 0.6.x。
+**下位机 0.7.2 安装：** 先准备 Python 3.12+（本次含视频交互包），解压后 Windows 运行 `Setup.cmd`，macOS/Linux 运行 `python3 install.py`。安装时联网下载依赖；不自动安装 Python 或注册 PATH。随后使用包内 `piper-robot.cmd` / `./piper-robot`。[旧包的一键安装补充说明](docs/ONE-CLICK-INSTALL.md) 仅适用于旧 video 0.3.0 / robot 0.6.x。
 
-视频管线和下位机管线现在分别发布，各有 CLI 和 MCP。两个安装器各自创建 `.venv`，无需安装另一包。
+视频与机器人分别有 CLI/MCP。Robot 0.7.2 交互包附带 Video 0.3.1，在 `.venv` / `.video-venv` 中隔离安装；独立视频发布为更新 wheel，不是新的离线 ZIP。
 
 | 安装包 | 独立入口 | 部署向导 |
 |---|---|---|
-| [视频 v0.3.0](https://github.com/Nothing1596/Piper-Policy/releases/tag/video-v0.3.0) | `piper-video` / `piper-video mcp` | [中文](docs/VIDEO-GUIDE.zh.md) / [English](docs/VIDEO-GUIDE.en.md) |
-| [下位机 v0.7.1](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.7.1) | `piper-robot` / `piper-robot mcp` | [中文](docs/ROBOT-GUIDE.zh.md) / [English](docs/ROBOT-GUIDE.en.md) |
+| [视频 v0.3.1](https://github.com/Nothing1596/Piper-Policy/releases/tag/video-v0.3.1) | `piper-video` / `piper-video mcp` | [中文](docs/VIDEO-GUIDE.zh.md) / [English](docs/VIDEO-GUIDE.en.md) |
+| [下位机 v0.7.2](https://github.com/Nothing1596/Piper-Policy/releases/tag/robot-v0.7.2) | `piper-robot` / `piper-robot mcp` | [中文](docs/ROBOT-GUIDE.zh.md) / [English](docs/ROBOT-GUIDE.en.md) |
 
 **命令与功能参考：** [视频 CLI](docs/VIDEO-CLI-REFERENCE.md) · [下位机 CLI](docs/ROBOT-CLI-REFERENCE.md)。包含完整命令索引、参数、默认值、单位、调用示例、MCP 工具和实际 `--help` 输出。
 
@@ -62,7 +62,7 @@ flowchart LR
  F --> A
 ```
 
-下位机包独立提供仿真启动和 RGB-D 取图，不安装视频解析包。MCP 不另占 CAN。动作返回 job_id 后还需查询完成状态、再看当前画面。取图工具当前支持 MuJoCo；真机 SDK、驱动和标定需另行部署验收。
+机器人 wheel 独立提供仿真与 RGB-D；完整交互包另附视频 wheel。MCP 不另占 CAN。动作返回 job_id 后还需查询完成状态、再看当前画面。取图工具当前支持 MuJoCo；真机 SDK、驱动和标定需另行部署验收。
 
 Codex、Claude Code 等代理可以同时连接两个 MCP，或者直接调用两个 CLI：读示范 → 看当前场景 → 调动作工具 → 查反馈 → 再看图。视频历史不会直接转换为机械臂指令。见 [独立包验收](docs/SPLIT-VALIDATION.md)。
 

@@ -1,8 +1,17 @@
 # piper-video 命令与功能 / Command reference
 
-适用 **0.3.0**。[返回中文 README](../README.md) · [English README](../README.en.md) · [安装向导](VIDEO-GUIDE.zh.md) · [Installation guide](VIDEO-GUIDE.en.md)
+适用 **0.3.1**；下方旧完整 help 保留 0.3.0 的历史范围，新增 watch 以实际 `--help` 为准。[返回中文 README](../README.md) · [English README](../README.en.md) · [安装向导](VIDEO-GUIDE.zh.md) · [Installation guide](VIDEO-GUIDE.en.md)
 
 前端为 `piper-video`；Windows 离线包使用 `.\piper-video.cmd`。只负责视频证据，不提供机器人动作或仿真启动。The video-only CLI selects frames, interprets demonstrations and manages evidence; it does not execute robot actions.
+
+## 0.3.1：按时间观看与评价
+
+```sh
+piper-video watch --address /absolute/demo.mp4 --mode direct --at-s 1.5 --output work/watch-point-01
+piper-video watch --address /absolute/demo.mp4 --mode pipeline --start-s 0 --end-s 3 --max-frames 6 --output work/watch-range-01
+```
+
+pipeline 返回图片、真实时间和评价；检测器及视觉 API 按显式配置可选。`--analysis-cache DIR` 缓存相同视频/检测器的 CV 分析，不将旧视觉 API 结果冒充本次请求。每次使用新 output。详见 [0.3.1 指南](versions/video-0.3.1.zh.md)。watch 是 CLI 入口；不要假定视频 MCP 自动存在同名工具，客户端应以 tools/list 为准。
 
 ## 调用流程 / Workflow
 

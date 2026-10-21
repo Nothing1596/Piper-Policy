@@ -1,8 +1,8 @@
 # piper-robot 命令与功能 / Command reference
 
-适用 **0.7.1**。[中文安装](ROBOT-GUIDE.zh.md) · [English installation](ROBOT-GUIDE.en.md) · [单次任务演示](ONE-TASK-DEMO.zh.md)
+适用 **0.7.2**；文末历史 0.7.1 help 快照保留其版本范围，准确参数以本地 `--help` 为准。[中文安装](ROBOT-GUIDE.zh.md) · [English installation](ROBOT-GUIDE.en.md) · [单次任务演示](ONE-TASK-DEMO.zh.md)
 
-源码开发版 **0.7.2.dev1** 新增 `/video start|status|stop`、实时 `/observe` 和 `--agent` JSONL 模型入口，见 [实时视频指南](ROBOT-LIVE-VIDEO.zh.md)。下方历史发行版 help 保留其版本范围。
+从开发阶段合入本版的功能包括 `/video start|status|stop`、实时 `/observe` 和 `--agent` JSONL 模型入口，见 [实时视频指南](ROBOT-LIVE-VIDEO.zh.md)。下方历史发行版 help 保留其版本范围。
 
 ## 推荐：单终端 / Recommended console
 
@@ -21,11 +21,11 @@ piper-robot
 
 没有 TTY 的控制台启动须显式指定 `--mode simulation` 或 `--mode real`。`--simulation-backend sim` 选择确定性测试替身，默认 `mujoco` 是物理仿真。`--root DIR` 选择前端数据根目录，模式与目标配置分开保存。`/quit` 等待已接受动作结束并清理专用执行器，附着共享服务时只释放本会话；退出不是急停。
 
-## 源码新增：force recovery（未发布）
+## 0.7.2：force recovery
 
-`/config force` 查看；`/config force on|off` 提议修改，再 `/confirm` 应用。仅允许已有 ≤5° 越界的保持/向内恢复，每次动作请求必须 `/approve <job_id>`，即使审批为 `auto`。不覆盖控制器回报限位、不改固件、不自动裁剪目标。仅显式关节动作及控制模式支持越界恢复；HTTP/MCP 共用相同准入和确认规则。详见 [恢复操作](ROBOT-INTERACTIVE.zh.md#force-越界恢复源码新增尚未包含在-071-发行包)。
+`/config force` 查看；`/config force on|off` 提议修改，再 `/confirm` 应用。仅允许已有 ≤5° 越界的保持/向内恢复，每次动作请求必须 `/approve <job_id>`，即使审批为 `auto`。不覆盖控制器回报限位、不改固件、不自动裁剪目标。仅显式关节动作及控制模式支持越界恢复；HTTP/MCP 共用相同准入和确认规则。详见 [恢复操作](ROBOT-INTERACTIVE.zh.md)。
 
-Operator-only force recovery is off by default. Enable/disable with `/config force on|off`, then `/confirm`. Every action request requires separate operator approval, including auto mode. The 5-degree allowance covers an existing model/site overrun only: hold or move inward, never create or worsen an overrun. Queried controller limits remain enforced. This is an unreleased source feature, not a physical acceptance claim.
+Operator-only force recovery is off by default. Enable/disable with `/config force on|off`, then `/confirm`. Every action request requires separate operator approval, including auto mode. The 5-degree allowance covers an existing model/site overrun only: hold or move inward, never create or worsen an overrun. Queried controller limits remain enforced. This is included in 0.7.2; it is not a physical acceptance claim.
 
 ## 兼容脚本与独立 MCP / Script and MCP compatibility
 

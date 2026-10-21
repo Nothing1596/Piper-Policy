@@ -1,84 +1,55 @@
-# 视频管线独立部署指南
+# Video 0.3.1 独立使用指南
 
-[English](VIDEO-GUIDE.en.md)
+[English](VIDEO-GUIDE.en.md) · [下载](https://github.com/Nothing1596/Piper-Policy/releases/tag/video-v0.3.1) · [版本说明](VIDEO-RELEASE-0.3.1.md) · [功能与命令](VIDEO-CLI-REFERENCE.md)
 
-[完整命令与功能参考](VIDEO-CLI-REFERENCE.md)
+本版发布 Python 3.12+ wheel，不是新的 Windows 全离线包。旧 Video 0.3.0 ZIP 及 installer-v1 的说明见 [历史指南](versions/video-0.3.0.zh.md)，不要将旧安装脚本与本版 wheel 混用。Robot 0.7.2 交互包已附带此视频组件并单独安装，无需重复安装下面的独立环境。
 
-更简单的入口：[一键安装与命令注册](ONE-CLICK-INSTALL.md)。新包双击 `Setup.cmd`；原版 ZIP 使用该页的小型补充包。它自动检测/安装 Python 并注册用户 PATH。下面保留原版手动入口说明。
+## 安装
 
-版本 0.3.0，入口 `piper-video`。此包独立安装视频处理、模型 API 和 MCP；不安装下位机或 MuJoCo。Python 分发名仍为 `piper-lab`，保留旧上位机模块以兼容源码，但本指南使用视频专用入口。
-
-## 1. 安装
-
-准备 Windows x64 和 Python 3.12 x64。解压到一个新目录，在该目录打开 PowerShell：
+下载 piper_lab-0.3.1-py3-none-any.whl 与 SHA256SUMS.txt 并核对。Windows PowerShell，在新的工作目录：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-.\piper-video.cmd --help
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install './piper_lab-0.3.1-py3-none-any.whl[video,model,mcp,onnx]'
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\piper-video.exe --help
 ```
 
-安装器核对 SHA256，再从包内 wheels 离线安装到 `.venv`。不改全局 PATH，不启动模型，不保存密钥。若 Python 没有 `py` 启动器，给安装器传入 `-PythonExe C:\Python312\python.exe`。换机器时重新解压安装，不复制 `.venv`。
+macOS/Linux：
 
-## 2. 不接模型，先验证视频入口
-
-```powershell
-.\piper-video.cmd candidates --video examples\transfer.mp4 --output work\candidates-01
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install './piper_lab-0.3.1-py3-none-any.whl[video,model,mcp,onnx]'
+.venv/bin/python -m pip check
+.venv/bin/piper-video --help
 ```
 
-查看生成的 `manifest.json` 和帧图。这里完成解码、运动分析与候选帧筛选，没有理解动作语义。输出目录必须是新目录；重跑使用不同名字。
+首次安装下载平台依赖。没有安装机器人、模型服务或大模型权重，也没有自动注册 PATH。后面的 piper-video 命令在未激活环境时替换为以上绝对/相对启动器。wheel 不包含示例视频、ONNX 权重和自己的云端配置。
 
-## 3. 接入模型 API
+## 先验证视频，再接模型
 
-`profiles` 包含 LM Studio、OpenAI、OpenAI-compatible、Anthropic 和 Gemini 示例。复制合适的 JSON，填写实际模型名、端点，保留密钥为环境变量引用。不要把密钥写进 JSON 或发给模型。
+使用自己存在的视频，且每次使用新输出目录：
 
-```powershell
-$env:OPENAI_API_KEY = '填写你自己的密钥'
-.\piper-video.cmd models show --model-config profiles\openai.json
-.\piper-video.cmd models probe --model-config profiles\openai.json --image examples\probe.jpg --output work\probe-01
-.\piper-video.cmd compile --video examples\transfer.mp4 --task "描述抓取、搬运、释放以及最终位置；看不清则记录未知" --model-config profiles\openai.json --detector-onnx models\yolo11n.onnx --output work\demo-01
-.\piper-video.cmd inspect --bundle work\demo-01
+```sh
+piper-video candidates --video /absolute/demo.mp4 --output work/candidates-01
+piper-video watch --address /absolute/demo.mp4 --mode direct --at-s 1.5 --output work/watch-point-01
+piper-video watch --address /absolute/demo.mp4 --mode pipeline --start-s 0 --end-s 3 --max-frames 6 --output work/watch-range-01
 ```
 
-先核对 `models` 目录中的 ONNX 实际文件名；上例以 `yolo11n.onnx` 为例。检测器可选，删除 `--detector-onnx` 即不使用它。`show` 只检查配置，`probe` 才真实发送图片。云服务会收到选中图像并可能产生费用；本地模型服务及其大模型权重不包含在包中。
+candidates/direct 不调用视觉 API。pipeline 返回本地 CV 评价和可选检测/视觉评价；图像、真实时间、引用和实际所见范围分别保留。address 支持本地路径、file URL 或可直接下载的视频 URL，不保证支持网页播放器。
 
-结果 `demo.json` 记录阶段、帧引用和未知项。`supported` 是模型判断，不是人工验收。`find --store ... --task ...` 搜索已注册示范；编译时用 `--store work\demos.sqlite` 注册。`evaluate --bundle ... --annotations ... --output ...` 比较人工标注，包中注释模板不是现成真值。
+要接视觉模型，建立自己的 provider JSON（provider/model/base_url、api_key_env 或 api_key_file 引用、图片与输出预算）。源码 profiles 模板可作参考，密钥不要写入 JSON 或发布包。先执行 `models show`，再 `models probe --model-config FILE --image FILE --output NEW_DIR` 验证真正图片请求；show 不是推理验收。
 
-## 4. 模型通过 MCP 调用
+`compile --video FILE --task TEXT --model-config FILE --output NEW_DIR` 生成阶段/证据/unknown 的 demo.json，`inspect --bundle DIR` 读取。为 watch 添加 `--model-config FILE` 才启用快速视觉 API，添加 `--detector-onnx FILE` 才使用实际权重；模型评价可能收费，检测器不需要语言模型服务。
 
-在支持 stdio MCP 的代理中配置以下服务器，所有路径替换为解压后的绝对路径：
+## MCP 与模型工具
 
-```json
-{
-  "mcpServers": {
-    "piper-video": {
-      "command": "D:/PiperVideo/.venv/Scripts/python.exe",
-      "args": ["-m", "piperlab.video_entry", "mcp", "--workspace", "D:/PiperVideo", "--model-config", "D:/PiperVideo/profiles/openai.json"]
-    }
-  }
-}
-```
+`piper-video mcp --workspace DIR --model-config FILE` 启动 stdio 服务，目录必须存在，外部代理通过准确解释器和参数接入。工具包括 capabilities、候选帧、分页、取图、编译、检查和标注评估，以 tools/list 为准。watch 是本版 CLI 子命令，不假定独立视频 MCP 有同名工具；机器人前端另外提供 demo_watch/demo_reference。
 
-不同代理的配置文件格式可能不同；上面给出标准进程命令和参数，按其 MCP 设置填写。密钥变量需由客户端进程继承。省略 `--model-config` 时仍可选帧、翻页、取图及读取证据；`video_compile` 会提示尚未配置模型。不要往 MCP 的标准输入输出混入普通终端文字。
+省略模型配置时仍可用本地证据工具。代理自行看图不等于把其登录态转成管线 API key。完整使用场景见 [本版功能](versions/video-0.3.1.zh.md)。
 
-工具包括 `video_candidates`、`video_candidate_page`、`video_frame`、`video_compile`、`video_inspect`、`video_evaluate`。也可让代理直接执行 `piper-video.cmd`，读取 JSON 和图片。外部代理自己的视觉能力可以用于看图；不等于把代理登录态作为模型 API 凭证。
+## 结果与边界
 
-## 5. 结构与边界
+保存 manifest、图片、demo.json 和 model-calls。图片来源、时间和评价对应，选帧或检测标签不证明动作发生；单帧不证明接触或完整时间过程。缓存 CV 分析不等于缓存当前 API 的语义判断。输出已有、引用未知、图像不一致、截断或 API 故障应保留错误，不静默宣称成功。
 
-```text
-视频 → PyAV 解码 → OpenCV 运动分析/选帧
-                     ↓ 可选 ONNX Runtime 检测和跟踪
-              选中帧 + 时间信息 → 模型 API
-                     ↓
-           结构校验 → 阶段/证据/unknown → demo.json
-```
-
-这是一条示范解析和证据管理管线，不是更新模型权重的训练器。代理若要执行任务，需另外接入 `piper-robot` MCP，结合机器人当前图像重新判断；历史视频不授权机械臂动作。真人六棱柱/玻璃容器视频的解析结果不等于当前彩块/绿色托盘技能能够执行。
-
-## 6. 排障与许可
-
-- API 失败：核对环境变量、端点、实际视觉模型与输出格式支持，查看输出旁的 model-calls 目录；未完成的步骤保留为未知。
-- 上下文超限或超时：减少关键帧，确认服务上下文容量，不把重试超时当作成功。
-- MCP 无响应：先用 `--help` 检查解释器路径，再检查客户端日志；不要启动多个竞争本地模型的编译任务。
-- 依赖或哈希失败：保留日志，重新解压到新目录，不复用半安装环境。
-
-查看 `THIRD-PARTY.md`、`licenses` 和 `DETECTOR-SOURCE.md`。ONNX 检测器有独立的上游许可条件。发布页提供对应 Ultralytics 源码；本项目尚未给原创代码指定统一开源许可证。
+这是示范解析与证据管线，不训练权重、不提供机器人动作或自动三维建模。历史视频要结合当前机器人观察才可用于决策。当前发布检查见 [验证记录](implementation/release-0.7.2-validation.zh.md)；它不等于模型任务准确率或真机成功率。

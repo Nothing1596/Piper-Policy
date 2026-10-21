@@ -1,74 +1,35 @@
-# Independent video pipeline
+# Video 0.3.1 installation and workflow
 
-[中文](VIDEO-GUIDE.zh.md)
+[中文](VIDEO-GUIDE.zh.md) · [Download](https://github.com/Nothing1596/Piper-Policy/releases/tag/video-v0.3.1) · [Release notes](VIDEO-RELEASE-0.3.1.md)
 
-[Complete command and feature reference](VIDEO-CLI-REFERENCE.md)
+This release provides a Python 3.12+ wheel and source, not a new offline Windows bundle. The older 0.3.0 kit keeps its [historical guide](versions/video-0.3.0.zh.md). Robot 0.7.2 already includes this wheel and installs a separate video environment.
 
-For automatic Python setup and user PATH registration, see [one-click installation](ONE-CLICK-INSTALL.md). Double-click `Setup.cmd` in new kits; original ZIPs use the small add-on. The original manual entry point remains documented below.
+## Install independently
 
-Version 0.3.0, CLI `piper-video`. The Python distribution remains `piper-lab` for compatibility; this installation contains no robot distribution or MuJoCo. Legacy upper-level modules remain in the wheel, while this guide uses the video-only entry point.
+Verify the downloaded wheel against SHA256SUMS.txt. Create a fresh Python 3.12 virtual environment, then use its interpreter:
 
-## Install
-
-Install Python 3.12 x64 on Windows x64. Extract into a fresh directory and run PowerShell there:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-.\piper-video.cmd --help
-.\piper-video.cmd candidates --video examples\transfer.mp4 --output work\candidates-01
+```sh
+python -m pip install './piper_lab-0.3.1-py3-none-any.whl[video,model,mcp,onnx]'
+python -m pip check
+piper-video --help
 ```
 
-The installer verifies SHA256 and installs bundled wheels offline into `.venv`. It does not change global PATH, start models, or configure credentials. Without the `py` launcher, pass `-PythonExe C:\Python312\python.exe`. Reinstall on each new machine instead of copying a virtual environment. Always use a new output directory.
+Dependencies download during installation. No robot distribution, model weights, detector weights, demonstration files or credentials are bundled. Do not copy an old .venv or rerun an installer locked to 0.3.0 after upgrading. Use the environment's Scripts/piper-video.exe on Windows or bin/piper-video on macOS/Linux if it is not activated.
 
-The last command decodes video and selects candidate frames locally. Inspect its `manifest.json` and images. Candidate extraction alone does not interpret actions.
+## View and evaluate a demonstration
 
-## Configure a model API
-
-The `profiles` directory includes LM Studio, OpenAI, OpenAI-compatible, Anthropic and Gemini examples. Copy a profile, set the actual endpoint and vision model, and keep credentials in the named environment variable. Local model servers and large model weights are not bundled.
-
-```powershell
-$env:OPENAI_API_KEY = 'your-own-key'
-.\piper-video.cmd models show --model-config profiles\openai.json
-.\piper-video.cmd models probe --model-config profiles\openai.json --image examples\probe.jpg --output work\probe-01
-.\piper-video.cmd compile --video examples\transfer.mp4 --task "Describe grasp, transport, release and final position; record uncertainty" --model-config profiles\openai.json --output work\demo-01
-.\piper-video.cmd inspect --bundle work\demo-01
+```sh
+piper-video candidates --video /absolute/demo.mp4 --output work/candidates-01
+piper-video watch --address /absolute/demo.mp4 --mode direct --at-s 1.5 --output work/point-01
+piper-video watch --address /absolute/demo.mp4 --mode pipeline --start-s 0 --end-s 3 --max-frames 6 --output work/range-01
 ```
 
-`show` checks configuration; `probe` sends a real image. Cloud providers receive selected images and may charge for calls. Optionally pass `--detector-onnx` with the actual ONNX filename under `models`. This detector is separate from the vision-language model.
+Use an existing video and fresh output paths. direct returns actual decoded frames and timestamps without a model API. pipeline adds CV evaluation, optional ONNX detections and optional vision-model evaluation. Provide --detector-onnx FILE or --model-config FILE explicitly. Evaluation references and the frames actually reviewed remain auditable; a historical image is never a current robot capture.
 
-Use `compile --store work\demos.sqlite` to register a bundle, `find --store ... --task ...` to retrieve it, and `evaluate --bundle ... --annotations ... --output ...` to compare supplied human annotations. The bundled annotation example is a template, not ground truth. `demo.json` records stages, citations and unknowns. A model's `supported` verdict is not independent human acceptance.
+Configure your own provider/model/base URL and credential reference, then use models probe with a real image before compile. models show does not test inference. compile produces stages, evidence and unknowns; inspect/find/evaluate retain their prior functions. Cloud requests may incur cost.
 
-## MCP and terminal agents
+## MCP and boundaries
 
-Configure a stdio MCP server in your agent, replacing all paths:
+piper-video mcp --workspace DIR --model-config FILE exposes the configured evidence tools through stdio. Use tools/list for exact schemas. The watch CLI subcommand does not imply a same-named standalone video MCP tool; Robot's frontend separately offers demo_watch/demo_reference.
 
-```json
-{
-  "mcpServers": {
-    "piper-video": {
-      "command": "D:/PiperVideo/.venv/Scripts/python.exe",
-      "args": ["-m", "piperlab.video_entry", "mcp", "--workspace", "D:/PiperVideo", "--model-config", "D:/PiperVideo/profiles/openai.json"]
-    }
-  }
-}
-```
-
-Client configuration formats vary; use the command and arguments in your client's MCP settings. The client process must inherit API key variables. Without `--model-config`, local selection, paging, image viewing and evidence inspection remain available; compilation reports that no model is configured. Keep normal terminal text out of the MCP stdio stream.
-
-Tools: `video_candidates`, `video_candidate_page`, `video_frame`, `video_compile`, `video_inspect`, `video_evaluate`. Agents can alternatively invoke `piper-video.cmd` and consume JSON/images. An agent can use its own vision model to inspect returned frames; its login is not an inference API credential for this pipeline.
-
-## Architecture and limits
-
-```text
-Video → PyAV decode → OpenCV motion analysis/frame selection
-                            ↓ optional ONNX detection/tracking
-                 selected frames + timestamps → model API
-                            ↓
-                  schema checks → stages/evidence/unknowns → demo.json
-```
-
-This pipeline interprets demonstrations and stores evidence; it does not train model weights. To act, separately connect the `piper-robot` MCP server and examine the current robot scene. Historical video neither authorizes motion nor proves that the robot's skills can reproduce the task. Hexagonal-object/glass-container demonstrations exceed the current colored-cube/green-tray skill scope.
-
-For API failures, inspect the sibling model-calls directory and check credentials, endpoint, vision support and output format. For context overflow, reduce selected frames and check server capacity. Do not treat timeouts as success or run competing local inference jobs. For failed installation, preserve logs and extract afresh.
-
-See `THIRD-PARTY.md`, `licenses` and `DETECTOR-SOURCE.md`; the release includes matching Ultralytics source. Detector licensing is independent. No repository-wide license has yet been assigned to original project code.
+This is an evidence pipeline, not a weight trainer, robot controller or automatic 3D reconstruction system. Missing or inconsistent frames, unsupported references, truncation and API errors remain explicit failures. See the [current validation record](implementation/release-0.7.2-validation.zh.md); package checks do not establish semantic accuracy or hardware task success.
