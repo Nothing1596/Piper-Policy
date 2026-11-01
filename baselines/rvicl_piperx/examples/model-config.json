@@ -1,0 +1,21 @@
+{
+  "adapter_revision": "piperx-watchact-support-physics-v1.6",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "low",
+  "seed": 0,
+  "max_episode_steps": 500,
+  "max_turns": 100,
+  "primitive_image_history": "latest",
+  "candidate_fps": 2.0,
+  "max_candidates": 128,
+  "max_keyframes": 16,
+  "clip_budget": 3,
+  "sam3_enabled": true,
+  "sam3_endpoint": "http://127.0.0.1:8114",
+  "sam3_protocol": "rest",
+  "sam3_timeout": 120,
+  "api_timeout": 300,
+  "trial_timeout": 7200,
+  "speed_percent": 20,
+  "schema_in_text": true
+}

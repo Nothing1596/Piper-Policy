@@ -1,0 +1,14 @@
+{
+  "original_remote_scene_sha256": {
+    "63": "17928ed1b9d9733878f6a4436f2e1914c208a7c37a72654d6a8c17a5c3b11e5e",
+    "64": "17619c1824219f268cd541aa743b427ba49312beb2459c56ba35304da9760d5b",
+    "71": "52b4e35cd18e334f4292a1d04363af2903dba40435cd80367ef041ea2b592357"
+  },
+  "scene_change": "Only compiler mesh directory and external file paths replaced with portable placeholders. Physics, geometry, body poses, solver and robot unchanged.",
+  "dataset": "BaiqiL/WatchAct@459e9a9faf7399754d34d53c48f277292ccc7885",
+  "asset_sources": [
+    "LIBERO@8f1084e3132a39270c3a13ebe37270a43ece2a01",
+    "WatchAct@97d8873e413601a2f511906a9860aa17740cb80e"
+  ],
+  "assets_distribution": "Downloaded from original upstreams, not bundled in release."
+}

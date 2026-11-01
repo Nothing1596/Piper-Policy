@@ -1,0 +1,170 @@
+{
+  "assets/alphabet_soup/texture_map.png": {
+    "url": "https://raw.githubusercontent.com/Lifelong-Robot-Learning/LIBERO/8f1084e3132a39270c3a13ebe37270a43ece2a01/libero/libero/assets/stable_hope_objects/alphabet_soup/texture_map.png",
+    "sha256": "cd47556b3b2916ae138e8fd370d4f5192a2fe100369eec254c3c173409f48674"
+  },
+  "assets/alphabet_soup/visual/textured_vis.msh": {
+    "url": "https://raw.githubusercontent.com/Lifelong-Robot-Learning/LIBERO/8f1084e3132a39270c3a13ebe37270a43ece2a01/libero/libero/assets/stable_hope_objects/alphabet_soup/visual/textured_vis.msh",
+    "sha256": "a9f36a95f4ad97cb141f134251114d46cc4f3950229d76ac815e751cc0cf121e"
+  },
+  "assets/ketchup/texture_map.png": {
+    "url": "https://raw.githubusercontent.com/Lifelong-Robot-Learning/LIBERO/8f1084e3132a39270c3a13ebe37270a43ece2a01/libero/libero/assets/stable_hope_objects/ketchup/texture_map.png",
+    "sha256": "01edda2f924589b0a23aac084c1270a4a39afde79131a1bec73f7a23ad592bfe"
+  },
+  "assets/ketchup/visual/textured_vis.msh": {
+    "url": "https://raw.githubusercontent.com/Lifelong-Robot-Learning/LIBERO/8f1084e3132a39270c3a13ebe37270a43ece2a01/libero/libero/assets/stable_hope_objects/ketchup/visual/textured_vis.msh",
+    "sha256": "52a6903d11261ef819b707241f058de28dced28746f9bbb142649a18f1d48321"
+  },
+  "assets/basket/basket_libero.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_libero.obj",
+    "sha256": "5fdcaffe5d55c129a6b8ed93ba5bc6861855346e78dddba2bd496cd5dd758342"
+  },
+  "assets/basket/basket_col_0.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_0.obj",
+    "sha256": "1122a4bb9125d4a271dc6d34b22fd3f7f952336a13831c9f9144a2978a9a415f"
+  },
+  "assets/basket/basket_col_1.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_1.obj",
+    "sha256": "d20e9fea38a67541ea3675f87c7e83236d53fd3133ae6f1bef1c11e9f02a03f6"
+  },
+  "assets/basket/basket_col_2.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_2.obj",
+    "sha256": "7a956b3f0005458e2395098b1a15395cc8eb974d9aa8bc9fa1062eca81e62e57"
+  },
+  "assets/basket/basket_col_3.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_3.obj",
+    "sha256": "6029c0b4602e131183f9b7d0cf583dff7bfb667322c6c6d3747a7f5e30349401"
+  },
+  "assets/basket/basket_col_4.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_4.obj",
+    "sha256": "769d72fb7d9f65d362b1aa46b9928ff7753fe2e5766f2e55497266f7305a5427"
+  },
+  "assets/basket/basket_col_5.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_5.obj",
+    "sha256": "b3ba3fc12082ed1abd64e8bd6f70b62eae21972023cd68bef7eb5e9acc37a823"
+  },
+  "assets/basket/basket_col_6.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_6.obj",
+    "sha256": "7a05e04ec6b8379d8a0221ccf22bc54565edd77da831b7e4b076cfc0cd8ea6b1"
+  },
+  "assets/basket/basket_col_7.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_7.obj",
+    "sha256": "bd76f9fa6862cfdc1e50209f11f7b09e3ad67e2281a288266e1547280d4b1fbb"
+  },
+  "assets/basket/basket_col_8.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_8.obj",
+    "sha256": "b7d53579bace9bafc050d912ce8b6ac991614757068ad8a7a310272f6f5dd700"
+  },
+  "assets/basket/basket_col_9.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_9.obj",
+    "sha256": "6062879d8b437d4a18bdd45369c9998df8b5fb202b6ac99d542c3c4fde109cf8"
+  },
+  "assets/basket/basket_col_10.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_10.obj",
+    "sha256": "8ae83711bbaf4c60a25b80c7606a9674e9694e2cd8d68e0a50b47d5510698531"
+  },
+  "assets/basket/basket_col_11.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_11.obj",
+    "sha256": "fa0817c6ab738f66d12d34dd0afa06faf28cd087c5bd6aa82e8c366b17aa70f0"
+  },
+  "assets/basket/basket_col_12.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_12.obj",
+    "sha256": "f2f64a60b58882bd18880fddc6bcf867167d787d8d9ced939e0f01031081951d"
+  },
+  "assets/basket/basket_col_13.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_13.obj",
+    "sha256": "864834a32d66fbb8df0bd7622c91d14fd87ab45fa62432d1ec79cc90c9d8d263"
+  },
+  "assets/basket/basket_col_14.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_14.obj",
+    "sha256": "dc46669fe6c47627fe4c50ba38aaee2d9bcb97194ff90e9a971d80c8706528f4"
+  },
+  "assets/basket/basket_col_15.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_15.obj",
+    "sha256": "ed892976f948af555352b136c618c8cae1525d2eb140a0b384c60d779d7a11f0"
+  },
+  "assets/basket/basket_col_16.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_16.obj",
+    "sha256": "307356838feb3725ca472b6bf77137b8f31ced41b79631e48405bb900579bdb1"
+  },
+  "assets/basket/basket_col_17.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_17.obj",
+    "sha256": "ed396105969ea1896f42ed86ec8a0828466cf743efc5110a44b29731edf59e74"
+  },
+  "assets/basket/basket_col_18.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_18.obj",
+    "sha256": "2aaa8a1774caba6c9791141ae660d12d3381d932e8e311f9cb2b292beaedce06"
+  },
+  "assets/basket/basket_col_19.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_19.obj",
+    "sha256": "aafe4fe7f8ca16497343aea3b22e5a75e4e40fc371f3909be149309facb78545"
+  },
+  "assets/basket/basket_col_20.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_20.obj",
+    "sha256": "28167d9eefd08076a52d1fde1055c3c4790687d39dc7fac10288b0c3073ab0b5"
+  },
+  "assets/basket/basket_col_21.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_21.obj",
+    "sha256": "14551e091683608ec2c4fcce41b7715b705a91d3f56b6284c3662896cd4d6345"
+  },
+  "assets/basket/basket_col_22.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_22.obj",
+    "sha256": "a36823f894670511cf156224b18c0011aaa0ee4c63d5f90f24c43b331c9e0a20"
+  },
+  "assets/basket/basket_col_23.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_23.obj",
+    "sha256": "644d265ad2a17a118873997deba557fbc1be9bfb69ef7405577a71247fe1f9e8"
+  },
+  "assets/basket/basket_col_24.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_24.obj",
+    "sha256": "c0b4d73c7665331954b0f6505b402a3026c670ab259084e47ba1877249306635"
+  },
+  "assets/basket/basket_col_25.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_25.obj",
+    "sha256": "92ae827b0ff70cd718c75152619c99193495f952e066b18b53ce1113f1c94491"
+  },
+  "assets/basket/basket_col_26.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_26.obj",
+    "sha256": "94f2b72cbf7cacc9611d52cebbd035e5a10ee6e272c2e162d9ffc737fae0aa92"
+  },
+  "assets/basket/basket_col_27.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_27.obj",
+    "sha256": "66351418d74de4536d6b7a588a4a4f8947a9b0fbd1421c4f7a689e617de2be18"
+  },
+  "assets/basket/basket_col_28.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_28.obj",
+    "sha256": "77cf1473b417865e5ccdf32cae441829ef9d28762934e50f761a4ca2ba4dd595"
+  },
+  "assets/basket/basket_col_29.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_29.obj",
+    "sha256": "85e731388ad8d02c6900840dfbbf2bfa69aeb73d04f3dcc20b5b25d6a4d12a3f"
+  },
+  "assets/basket/basket_col_30.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_30.obj",
+    "sha256": "e7e11e750610b68ce3f2e02578857788a53d85f0b531c19481a803c7c811f206"
+  },
+  "assets/basket/basket_col_31.obj": {
+    "url": "https://raw.githubusercontent.com/Baiqi-Li/WatchAct/97d8873e413601a2f511906a9860aa17740cb80e/custom_assets/basket/basket_col_31.obj",
+    "sha256": "ca64c229cd0eb28ba51409f48dc8c0c9a7036f634bcc5956fff8490f03eb49f2"
+  },
+  "assets/orange_juice/texture_map.png": {
+    "url": "https://raw.githubusercontent.com/Lifelong-Robot-Learning/LIBERO/8f1084e3132a39270c3a13ebe37270a43ece2a01/libero/libero/assets/stable_hope_objects/orange_juice/texture_map.png",
+    "sha256": "2488e5d72c7848db195be1d5a08d45a00b04122fff7ddcc107014d177d6d08c9"
+  },
+  "assets/orange_juice/visual/textured_vis.msh": {
+    "url": "https://raw.githubusercontent.com/Lifelong-Robot-Learning/LIBERO/8f1084e3132a39270c3a13ebe37270a43ece2a01/libero/libero/assets/stable_hope_objects/orange_juice/visual/textured_vis.msh",
+    "sha256": "9ebfebfe88f469abd9015bea348f242ee36a93829f75975535dcb44a5c3d876d"
+  },
+  "videos/GX010391.MP4": {
+    "url": "https://huggingface.co/datasets/BaiqiL/WatchAct/resolve/459e9a9faf7399754d34d53c48f277292ccc7885/videos/Imitation/front/GX010391.MP4",
+    "sha256": "c79435a158c820f65eaf294d3a69e6c7b363c836a3706a603de32250327d3201"
+  },
+  "videos/GX010392.MP4": {
+    "url": "https://huggingface.co/datasets/BaiqiL/WatchAct/resolve/459e9a9faf7399754d34d53c48f277292ccc7885/videos/Imitation/front/GX010392.MP4",
+    "sha256": "02db004634594efd9d0fd4f59b7052ef8def0cdd7ff168f9e7ec96b82f8d9dca"
+  },
+  "videos/GX010399.MP4": {
+    "url": "https://huggingface.co/datasets/BaiqiL/WatchAct/resolve/459e9a9faf7399754d34d53c48f277292ccc7885/videos/Imitation/front/GX010399.MP4",
+    "sha256": "f047a359e59734c924e78a56116dd501b7e8a46b0992b9ea5eac3736323c1142"
+  }
+}

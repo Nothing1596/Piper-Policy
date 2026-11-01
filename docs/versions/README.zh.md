@@ -1,5 +1,7 @@
 # Piper 各版本功能与使用指南
 
+2026-11-01 新增独立 **RPent → PiperX 1.6 仿真基线包**：[安装和自动化示例](../../baselines/rvicl_piperx/README.zh.md)。它复用 Robot 0.7.2 执行器，保留原 RPent 推理；不经过下述自有 skill/plan 管线，Robot/Video 版本号不变。
+
 核对日期：2026-10-21。本轮组件版本为 Robot 0.7.2 / Video 0.3.1；历史开发阶段、溯源分支与独立研究仍分别说明。具体发布与制品验收见各版本页。
 
 ## 推送检查与后续批次
@@ -14,6 +16,7 @@
 
 | 版本或阶段 | 主要用途 | 入口与安装形态 | 详细说明 |
 |---|---|---|---|
+| **RPent → PiperX 1.6** | 单臂视频模仿仿真基线与 WatchAct 三题自动化 | 独立联网安装 ZIP，`quickstart.py` | [安装、示例和限制](../../baselines/rvicl_piperx/README.zh.md) |
 | **Robot 0.7.2** | 当前视频、plan、几何与反馈闭环 | 附视频的联网安装交互包 | [本版功能与使用](robot-0.7.2.zh.md) |
 | **Video 0.3.1** | 按时间观看、管线评价与视频证据 | 独立更新 wheel，Robot 包内也包含 | [本版功能与使用](video-0.3.1.zh.md) |
 | 联合版 v0.2.1 | 复现历史视频→视觉策略→仿真流程 | Windows x64 / Python 3.12 离线包，`piper.cmd` | [功能、安装与任务流程](combined-0.2.1.zh.md) |

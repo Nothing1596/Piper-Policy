@@ -1,0 +1,50 @@
+{
+  "scope": "watchact_imitation_piperx_v1",
+  "task_id": "following_sequence_example_71",
+  "target": "cube_red",
+  "distractor": "cube_blue",
+  "target_shape": {
+    "type": "cylinder",
+    "radius_m": 0.034,
+    "half_height_m": 0.0418
+  },
+  "container_bounds": {
+    "min": [
+      0.31484,
+      0.13474,
+      0.001
+    ],
+    "max": [
+      0.48516,
+      0.26526,
+      0.127
+    ]
+  },
+  "thresholds": {
+    "lift_m": 0.02,
+    "translation_m": 0.05,
+    "distractor_motion_m": 0.015,
+    "stability_m": 0.003,
+    "stability_rotation_deg": 3.0,
+    "tcp_clearance_m": 0.1,
+    "terminal_window_s": 1.0
+  },
+  "official_final_goal": [
+    [
+      "On",
+      "basket_1",
+      "fixture_front_region"
+    ],
+    [
+      "In",
+      "alphabet_soup_1",
+      "basket_1_contain_region"
+    ],
+    [
+      "On",
+      "orange_juice_1",
+      "main_front_right_region"
+    ]
+  ],
+  "metric_scope": "Piper adapted physical goal; not official WatchAct/LIBERO score"
+}
