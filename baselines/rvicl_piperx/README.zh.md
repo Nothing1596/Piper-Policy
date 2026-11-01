@@ -2,7 +2,7 @@
 
 保留原 RPent 的视频层级、递归检索、planner 和动作原语，连接现有 PiperX MuJoCo 执行器。没有我们的 skill、plan 或行为复核；本入口只做仿真。
 
-**下载发布页的 `rpent-piperx-1.6.zip`，不是 GitHub 自动生成的 Source code.zip。** 运行包附带固定版本 RPent 源码与 Piper 执行器 wheel；首次安装依赖和准备视频仍需联网。
+**下载[发布页](https://github.com/Nothing1596/Piper-Policy/releases/tag/rpent-piperx-v1.6)的 `rpent-piperx-1.6.zip`，不是 GitHub 自动生成的 Source code.zip。** 运行包附带固定版本 RPent 源码与 Piper 执行器 wheel；首次安装依赖和准备视频仍需联网。
 
 ## 1. 准备环境
 
@@ -67,9 +67,10 @@ python3 quickstart.py run --config /absolute/model-config.json --env-file /absol
 
 ## 已知限制与详细说明
 
-最新三题是 **2 题正常结束但独立评分失败，1 题适配器异常**，不是成功基准。地面高度和滚动问题已通过动力学验收，稳定抓持尚未通过；180° 附近数值舍入可能触发关节限位拒绝并暂停。此版本保留问题记录，没有为模型失败更改策略。评分是 Piper 适配指标，不是官方 WatchAct/LIBERO 成绩。
+最新三题是 **2 题正常结束但独立评分失败，1 题适配器异常**，不是成功基准。地面高度和滚动问题已通过动力学验收，稳定抓持尚未通过；180° 附近数值舍入可能触发关节限位拒绝并暂停。新安装冷启动也曾出现反馈过期，自测失败时先查看 worker.log 和 cleanup.json；没有自动动作重试。此版本保留问题记录，没有为模型失败更改策略。评分是 Piper 适配指标，不是官方 WatchAct/LIBERO 成绩。
 
 - [原理、坐标、原语和手动命令](docs/adapter-reference.zh.md)
 - [批处理、续跑和自定义任务](docs/batch.zh.md)
 - [三题视频、物理修复、实际调用与评分结果](docs/watchact-batch-20261101.zh.md)
 - [软件与仿真验收记录](VALIDATION.zh.md)
+- [下载包的 macOS/Linux 实际验收](docs/release-1.6-validation.zh.md)
