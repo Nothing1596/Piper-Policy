@@ -2,7 +2,9 @@
 
 保留原 RPent 的视频层级、递归检索、planner 和动作原语，连接现有 PiperX MuJoCo 执行器。没有我们的 skill、plan 或行为复核；本入口只做仿真。
 
-**下载[发布页](https://github.com/Nothing1596/Piper-Policy/releases/tag/rpent-piperx-v1.6)的 `rpent-piperx-1.6.zip`，不是 GitHub 自动生成的 Source code.zip。** 运行包附带固定版本 RPent 源码与 Piper 执行器 wheel；首次安装依赖和准备视频仍需联网。
+**不限于三个视频。服务器自定义任务用 `run --manifest`，三题 prepare 仅是可选示例。**
+
+**下载[发布页](https://github.com/Nothing1596/Piper-Policy/releases/tag/rpent-piperx-v1.6.1)的 `rpent-piperx-1.6.1.zip`，不是 GitHub 自动生成的 Source code.zip。** 运行包附带固定版本 RPent 源码与 Piper 执行器 wheel；首次安装依赖和准备视频仍需联网。
 
 ## 1. 准备环境
 
@@ -14,7 +16,7 @@
 解压后进入目录，所有命令在**同一个终端**完成：
 
 ```sh
-cd rpent-piperx-1.6
+cd rpent-piperx-1.6.1
 python3 quickstart.py setup
 python3 quickstart.py smoke
 ```
@@ -22,7 +24,21 @@ python3 quickstart.py smoke
 `setup` 自动建立独立 Python 3.12 环境、安装锁定依赖并核验 RPent 源码。重复执行不会删除实验记录。
 `smoke` 串行运行两题脚本化响应＋真实 MuJoCo，自动启动、清理执行器，**没有模型 API 费用，也不代表模型完成了任务**。
 
-## 2. 准备三题 WatchAct 示例
+## 2. 配置自己的作业（服务器推荐）
+
+```sh
+mkdir -p jobs
+cp examples/custom-manifest.json jobs/my-tasks.json
+cp examples/model-config.json jobs/my-run.json
+cp examples/model.env.example .env.model
+# 编辑任务清单中的视频、场景、评分路径；填写模型配置及私有凭据
+python3 quickstart.py run --manifest jobs/my-tasks.json --config jobs/my-run.json --env-file .env.model --output runs/my-batch --dry-run
+python3 quickstart.py run --manifest jobs/my-tasks.json --config jobs/my-run.json --env-file .env.model --output runs/my-batch
+```
+
+清单可包含任意数量的视频和独立回合；每行仍需匹配的单臂场景与评分。不会根据任意视频自动重建场景。无需运行下面的三题 prepare。模型名、轮数、步数、超时等放在 `my-run.json`，API 地址和密钥放在 `.env.model`。[完整服务器配置与覆盖参数](docs/custom-batch.zh.md)。
+
+## 3. 可选：准备三题 WatchAct 示例
 
 ```sh
 python3 quickstart.py prepare
@@ -36,7 +52,7 @@ python3 quickstart.py prepare
 | imitation_data_320 | GX010392.MP4 | 拿起并放回番茄酱，再将汤罐入篮 |
 | imitation_data_355 | GX010399.MP4 | 汤罐入篮，橙汁盒保持 |
 
-## 3. 配置模型，然后启动自动化
+## 4. 运行默认三题示例
 
 ```sh
 cp examples/model.env.example .env.model
@@ -56,7 +72,7 @@ python3 quickstart.py run --config /absolute/model-config.json --env-file /absol
 
 再次运行相同命令会核对原结果，**不重跑已结束成功、失败或异常回合，不重放未知动作**。基础设施异常后先检查回执；确认清理后显式再次运行才会继续未启动任务。要启动一组独立新实验，明确换 `--output runs/new-batch`。
 
-## 4. 看结果
+## 5. 看结果
 
 打开 `runs/watchact/run-*/summary.json`，逐题看 `score.json`、`receipt.json` 和 `worker.log`。运行正常结束不等于任务成功。
 

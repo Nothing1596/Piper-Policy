@@ -1,0 +1,18 @@
+[
+  {
+    "job_id": "my-task-seed-0",
+    "kind": "model",
+    "arm_count": 1,
+    "seed": 0,
+    "video": {
+      "path": "/absolute/videos/my-demo.mp4",
+      "start_s": 0.0,
+      "end_s": null
+    },
+    "language_instruction": "Perform the demonstrated sequence in the current robot scene.",
+    "camera_perspective": "front",
+    "spatial_reference": "camera",
+    "simulation_asset": "/absolute/scenes/matched-piper-scene.xml",
+    "evaluation_file": "/absolute/operator/my-evaluation.json"
+  }
+]

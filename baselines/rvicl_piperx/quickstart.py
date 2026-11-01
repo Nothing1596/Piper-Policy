@@ -132,13 +132,25 @@ def main(argv=None):
     p.add_argument('command', choices=['setup', 'smoke', 'prepare', 'run'])
     p.add_argument('--rpent-root', type=Path, default=ROOT / 'deps/RPent')
     p.add_argument('--prepared', type=Path, default=ROOT / 'var/watchact-v5')
+    p.add_argument('--manifest', type=Path, help='Your task list; bypass the three bundled WatchAct examples')
     p.add_argument('--output', type=Path)
     p.add_argument('--env-file', type=Path, default=ROOT / '.env.model')
     p.add_argument('--config', type=Path, default=ROOT / 'examples/model-config.json')
+    p.add_argument('--ffmpeg-dir', type=Path, help='Directory containing ffmpeg and ffprobe')
+    p.add_argument('--model')
+    p.add_argument('--reasoning-effort')
+    p.add_argument('--sam3-endpoint')
+    p.add_argument('--primitive-image-history', choices=['latest', 'budget'])
+    p.add_argument('--max-turns', type=int)
+    p.add_argument('--max-episode-steps', type=int)
     p.add_argument('--dry-run', action='store_true', help='Check prepared scene/scorer bindings; no model requests')
     args = p.parse_args(argv)
     if sys.platform not in ('linux', 'darwin'):
         p.error('Use Linux, macOS or Windows WSL2; native Windows batch locking is not supported')
+    if args.manifest and args.command != 'run':
+        p.error('--manifest is for run; prepare only prepares the bundled WatchAct examples')
+    if args.ffmpeg_dir:
+        os.environ['PATH'] = str(args.ffmpeg_dir.resolve()) + os.pathsep + os.environ.get('PATH', '')
     rpent = args.rpent_root.resolve()
     if args.command == 'setup':
         setup(rpent)
@@ -157,14 +169,20 @@ def main(argv=None):
     output = (args.output or ROOT / ('runs/smoke' if args.command == 'smoke' else 'runs/watchact')).resolve()
     command = [str(python), '-m', 'rvicl_ig.piper_evaluate', '--rpent-root', str(rpent),
                '--config', str(args.config.resolve()), '--output-root', str(output)]
+    for name in ('model', 'reasoning_effort', 'sam3_endpoint', 'primitive_image_history',
+                 'max_turns', 'max_episode_steps', 'ffmpeg_dir'):
+        value = getattr(args, name)
+        if value is not None:
+            command += ['--' + name.replace('_', '-'), str(value.resolve() if isinstance(value, Path) else value)]
     if args.command == 'smoke':
         command.append('--smoke')
     else:
-        manifest = args.prepared.resolve() / 'manifest.json'
+        manifest = args.manifest.resolve() if args.manifest else args.prepared.resolve() / 'manifest.json'
         if not manifest.exists():
-            p.error('Run python3 quickstart.py prepare first')
-        # Verify retained evidence again without downloading or changing it.
-        prepare(args.prepared.resolve())
+            p.error('Manifest not found; supply --manifest or run quickstart.py prepare for the bundled examples')
+        if args.manifest is None:
+            # Verify retained example evidence without downloading or changing it.
+            prepare(args.prepared.resolve())
         if not args.dry_run and not args.env_file.is_file():
             p.error('Copy examples/model.env.example to .env.model and configure your model provider')
         command += ['--manifest', str(manifest)]

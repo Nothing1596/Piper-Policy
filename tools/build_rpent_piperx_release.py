@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import zipfile
 
@@ -19,7 +20,10 @@ def main():
     p.add_argument('--rpent-root', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--source-commit', required=True)
+    p.add_argument('--version', default='1.6')
     args = p.parse_args()
+    if not re.fullmatch(r'\d+\.\d+(?:\.\d+)?', args.version):
+        p.error('version must be numeric major.minor or major.minor.patch')
     if len(args.source_commit) != 40 or any(c not in '0123456789abcdef' for c in args.source_commit):
         p.error('source-commit must be the exact Git commit')
     if sha(args.wheel) != WHEEL_SHA256:
@@ -33,7 +37,7 @@ def main():
     for name, digest in lock['files'].items():
         if sha(args.rpent_root / name) != digest:
             raise ValueError('RPent file differs from lock: ' + name)
-    root = args.output / 'rpent-piperx-1.6'
+    root = args.output / ('rpent-piperx-' + args.version)
     root.mkdir(parents=True, exist_ok=False)
     for name in list(manifest['files']) + ['ADAPTER.sha256.json']:
         target = root / name
@@ -47,7 +51,7 @@ def main():
     (root / 'wheels').mkdir()
     shutil.copyfile(args.wheel, root / 'wheels' / args.wheel.name)
     (root / 'BUILD-INFO.json').write_text(json.dumps({
-        'source_commit': args.source_commit, 'adapter_revision': manifest['revision'],
+        'source_commit': args.source_commit, 'kit_version': args.version, 'adapter_revision': manifest['revision'],
         'rpent_commit': lock['commit'], 'rpent_python_files': len(lock['files']),
         'wheel_sha256': WHEEL_SHA256,
         'installation': 'Linux/macOS/WSL2; downloads Python dependencies and example assets; not an offline kit',
